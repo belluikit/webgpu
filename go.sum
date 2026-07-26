@@ -2,6 +2,8 @@ github.com/belluikit/webgpu/libs-ios v0.0.0-20260726222126-17584e286157 h1:Vp4rS
 github.com/belluikit/webgpu/libs-ios v0.0.0-20260726222126-17584e286157/go.mod h1:yrEzBQdYpTQ+Sk5dpDqlU53RuGve5Ear/COGcYePzZY=
 github.com/belluikit/webgpu/libs-windows v0.0.0-20260726222138-3367d15e87e4 h1:ZbPQJQjQh7pjsZQtF6dcbQkT1EIW96d4O+KbPi84d04=
 github.com/belluikit/webgpu/libs-windows v0.0.0-20260726222138-3367d15e87e4/go.mod h1:wnqokPIT0O/r2eXZcG1uG17ou3REkcdLLxeFVGtO/8U=
+github.com/belluikit/webgpu/libs-windows v0.0.0-20260726232427-992fb7d0a5a4 h1:dah5lckADKBUGinwcN9/IGjv9NyX4yqjKmnuGFqcRho=
+github.com/belluikit/webgpu/libs-windows v0.0.0-20260726232427-992fb7d0a5a4/go.mod h1:wnqokPIT0O/r2eXZcG1uG17ou3REkcdLLxeFVGtO/8U=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/go-gl/glfw/v3.4/glfw v0.1.0-pre.1.0.20260628091122-0bd588dc30cf h1:F3qluraUahVF1QyZcPaeqavaUMr65eQnR4AH4VmDojc=
