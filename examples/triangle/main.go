@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"runtime"
+	"time"
 
 	"github.com/belluikit/webgpu/wgpu"
 
@@ -71,9 +72,9 @@ func InitState[T interface{ GetSize() (int, int) }](window T, sd *wgpu.SurfaceDe
 	}
 	s.queue = s.device.GetQueue()
 
-	shader, err := s.device.CreateShaderModule(&wgpu.ShaderModuleDescriptor{
-		Label:          "shader.wgsl",
-		WGSLDescriptor: &wgpu.ShaderModuleWGSLDescriptor{Code: shader},
+	shader, err := s.device.TryCreateShaderModule(&wgpu.ShaderModuleDescriptor{
+		Label:      "shader.wgsl",
+		WGSLSource: &wgpu.ShaderSourceWGSL{Code: shader},
 	})
 	if err != nil {
 		return s, err
@@ -92,9 +93,9 @@ func InitState[T interface{ GetSize() (int, int) }](window T, sd *wgpu.SurfaceDe
 		AlphaMode:   caps.AlphaModes[0],
 	}
 
-	s.surface.Configure(s.adapter, s.device, s.config)
+	s.surface.Configure(s.device, s.config)
 
-	s.pipeline, err = s.device.CreateRenderPipeline(&wgpu.RenderPipelineDescriptor{
+	s.pipeline, err = s.device.TryCreateRenderPipeline(&wgpu.RenderPipelineDescriptor{
 		Label: "Render Pipeline",
 		Vertex: wgpu.VertexState{
 			Module:     shader,
@@ -135,22 +136,36 @@ func (s *State) Resize(width, height int) {
 		s.config.Width = uint32(width)
 		s.config.Height = uint32(height)
 
-		s.surface.Configure(s.adapter, s.device, s.config)
+		s.surface.Configure(s.device, s.config)
 	}
 }
 
 func (s *State) Render() error {
-	nextTexture, err := s.surface.GetCurrentTexture()
+	surfaceTexture, err := s.surface.TryGetCurrentTexture()
 	if err != nil {
 		return err
 	}
-	view, err := nextTexture.CreateView(nil)
+
+	nextTexture, ok := surfaceTexture.Get()
+	if !ok {
+		// maybe occluded, retry layter
+		time.Sleep(16 * time.Millisecond)
+		return nil
+	}
+
+	defer func() {
+		if nextTexture != nil {
+			nextTexture.Release()
+		}
+	}()
+
+	view, err := nextTexture.TryCreateView(nil)
 	if err != nil {
 		return err
 	}
 	defer view.Release()
 
-	encoder, err := s.device.CreateCommandEncoder(&wgpu.CommandEncoderDescriptor{
+	encoder, err := s.device.TryCreateCommandEncoder(&wgpu.CommandEncoderDescriptor{
 		Label: "Command Encoder",
 	})
 	if err != nil {
@@ -172,9 +187,8 @@ func (s *State) Render() error {
 	renderPass.SetPipeline(s.pipeline)
 	renderPass.Draw(3, 1, 0, 0)
 	renderPass.End()
-	renderPass.Release() // must release
 
-	cmdBuffer, err := encoder.Finish(nil)
+	cmdBuffer, err := encoder.TryFinish(nil)
 	if err != nil {
 		return err
 	}
@@ -182,6 +196,8 @@ func (s *State) Render() error {
 
 	s.queue.Submit(cmdBuffer)
 	s.surface.Present()
+
+	nextTexture = nil
 
 	return nil
 }

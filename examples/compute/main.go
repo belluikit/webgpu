@@ -58,9 +58,9 @@ func main() {
 	queue := device.GetQueue()
 	defer queue.Release()
 
-	shaderModule, err := device.CreateShaderModule(&wgpu.ShaderModuleDescriptor{
+	shaderModule, err := device.TryCreateShaderModule(&wgpu.ShaderModuleDescriptor{
 		Label: "shader.wgsl",
-		WGSLDescriptor: &wgpu.ShaderModuleWGSLDescriptor{
+		WGSLSource: &wgpu.ShaderSourceWGSL{
 			Code: shader,
 		},
 	})
@@ -71,7 +71,7 @@ func main() {
 
 	size := uint64(len(numbers)) * uint64(unsafe.Sizeof(uint32(0)))
 
-	stagingBuffer, err := device.CreateBuffer(&wgpu.BufferDescriptor{
+	stagingBuffer, err := device.TryCreateBuffer(&wgpu.BufferDescriptor{
 		Size:             size,
 		Usage:            wgpu.BufferUsageMapRead | wgpu.BufferUsageCopyDst,
 		MappedAtCreation: false,
@@ -81,7 +81,7 @@ func main() {
 	}
 	defer stagingBuffer.Release()
 
-	storageBuffer, err := device.CreateBufferInit(&wgpu.BufferInitDescriptor{
+	storageBuffer, err := device.TryCreateBufferInit(&wgpu.BufferInitDescriptor{
 		Label:    "Storage Buffer",
 		Contents: wgpu.ToBytes(numbers),
 		Usage: wgpu.BufferUsageStorage |
@@ -93,7 +93,7 @@ func main() {
 	}
 	defer storageBuffer.Release()
 
-	computePipeline, err := device.CreateComputePipeline(&wgpu.ComputePipelineDescriptor{
+	computePipeline, err := device.TryCreateComputePipeline(&wgpu.ComputePipelineDescriptor{
 		Compute: wgpu.ProgrammableStageDescriptor{
 			Module:     shaderModule,
 			EntryPoint: "main",
@@ -107,7 +107,7 @@ func main() {
 	bindGroupLayout := computePipeline.GetBindGroupLayout(0)
 	defer bindGroupLayout.Release()
 
-	bindGroup, err := device.CreateBindGroup(&wgpu.BindGroupDescriptor{
+	bindGroup, err := device.TryCreateBindGroup(&wgpu.BindGroupDescriptor{
 		Layout: bindGroupLayout,
 		Entries: []wgpu.BindGroupEntry{{
 			Binding: 0,
@@ -120,7 +120,7 @@ func main() {
 	}
 	defer bindGroup.Release()
 
-	encoder, err := device.CreateCommandEncoder(nil)
+	encoder, err := device.TryCreateCommandEncoder(nil)
 	if err != nil {
 		panic(err)
 	}
@@ -130,29 +130,29 @@ func main() {
 	computePass.SetPipeline(computePipeline)
 	computePass.SetBindGroup(0, bindGroup, nil)
 	computePass.DispatchWorkgroups(uint32(len(numbers)), 1, 1)
-	computePass.End()
+	computePass.TryEnd()
 	computePass.Release() // <- must call this before doing submit: https://github.com/gfx-rs/wgpu/issues/6145 https://github.com/gfx-rs/wgpu-native/issues/412
 
-	encoder.CopyBufferToBuffer(storageBuffer, 0, stagingBuffer, 0, size)
+	encoder.TryCopyBufferToBuffer(storageBuffer, 0, stagingBuffer, 0, size)
 
-	cmdBuffer, err := encoder.Finish(nil)
+	cmdBuffer, err := encoder.TryFinish(nil)
 	if err != nil {
 		panic(err)
 	}
 	queue.Submit(cmdBuffer)
 
-	var status wgpu.BufferMapAsyncStatus
-	err = stagingBuffer.MapAsync(wgpu.MapModeRead, 0, size, func(s wgpu.BufferMapAsyncStatus) {
+	var status wgpu.MapAsyncStatus
+	err = stagingBuffer.TryMapAsync(wgpu.MapModeRead, 0, size, func(s wgpu.MapAsyncStatus) {
 		status = s
 	})
 	if err != nil {
 		panic(err)
 	}
-	defer stagingBuffer.Unmap()
+	defer stagingBuffer.TryUnmap()
 
 	device.Poll(true, nil)
 
-	if status != wgpu.BufferMapAsyncStatusSuccess {
+	if status != wgpu.MapAsyncStatusSuccess {
 		panic(status)
 	}
 

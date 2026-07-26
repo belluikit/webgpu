@@ -3,46 +3,17 @@
 package wgpu
 
 /*
-
-#include <stdlib.h>
-#include "./lib/wgpu.h"
-
-extern void gowebgpu_error_callback_c(WGPUErrorType type, char const * message, void * userdata);
+#include "gen_wgpu_wrappers.h"
 extern void gowebgpu_queue_work_done_callback_c(WGPUQueueWorkDoneStatus status, void * userdata);
-
-static inline void gowebgpu_queue_write_buffer(WGPUQueue queue, WGPUBuffer buffer, uint64_t bufferOffset, void const * data, size_t size, WGPUDevice device, void * error_userdata) {
-	wgpuDevicePushErrorScope(device, WGPUErrorFilter_Validation);
-	wgpuQueueWriteBuffer(queue, buffer, bufferOffset, data, size);
-	wgpuDevicePopErrorScope(device, gowebgpu_error_callback_c, error_userdata);
-}
-
-static inline void gowebgpu_queue_write_texture(WGPUQueue queue, WGPUImageCopyTexture const * destination, void const * data, size_t dataSize, WGPUTextureDataLayout const * dataLayout, WGPUExtent3D const * writeSize, WGPUDevice device, void * error_userdata) {
-	wgpuDevicePushErrorScope(device, WGPUErrorFilter_Validation);
-	wgpuQueueWriteTexture(queue, destination, data, dataSize, dataLayout, writeSize);
-	wgpuDevicePopErrorScope(device, gowebgpu_error_callback_c, error_userdata);
-}
-
-static inline void gowebgpu_queue_release(WGPUQueue queue, WGPUDevice device) {
-	wgpuDeviceRelease(device);
-	wgpuQueueRelease(queue);
-}
-
 */
 import "C"
 import (
-	"errors"
-	"runtime/cgo"
 	"unsafe"
 )
 
-type Queue struct {
-	deviceRef C.WGPUDevice
-	ref       C.WGPUQueue
-}
-
 //export gowebgpu_queue_work_done_callback_go
-func gowebgpu_queue_work_done_callback_go(status C.WGPUQueueWorkDoneStatus, userdata unsafe.Pointer) {
-	handle := *(*cgo.Handle)(userdata)
+func gowebgpu_queue_work_done_callback_go(status C.WGPUQueueWorkDoneStatus, message C.WGPUStringView, userdata unsafe.Pointer) {
+	handle := lookupHandle(userdata)
 	defer handle.Delete()
 
 	cb, ok := handle.Value().(QueueWorkDoneCallback)
@@ -52,9 +23,13 @@ func gowebgpu_queue_work_done_callback_go(status C.WGPUQueueWorkDoneStatus, user
 }
 
 func (p *Queue) OnSubmittedWorkDone(callback QueueWorkDoneCallback) {
-	handle := cgo.NewHandle(callback)
+	handle := newHandle(callback)
 
-	C.wgpuQueueOnSubmittedWorkDone(p.ref, C.WGPUQueueOnSubmittedWorkDoneCallback(C.gowebgpu_queue_work_done_callback_c), unsafe.Pointer(&handle))
+	C.wgpuQueueOnSubmittedWorkDone(p.ref, C.WGPUQueueWorkDoneCallbackInfo{
+		mode:      C.WGPUCallbackMode_AllowProcessEvents,
+		callback:  C.WGPUQueueWorkDoneCallback(C.gowebgpu_queue_work_done_callback_c),
+		userdata1: handle.ToPointer(),
+	})
 }
 
 func (p *Queue) Submit(commands ...*CommandBuffer) (submissionIndex SubmissionIndex) {
@@ -64,10 +39,9 @@ func (p *Queue) Submit(commands ...*CommandBuffer) (submissionIndex SubmissionIn
 		return SubmissionIndex(r)
 	}
 
-	commandRefs := C.malloc(C.size_t(commandCount) * C.size_t(unsafe.Sizeof(C.WGPUCommandBuffer(nil))))
-	defer C.free(commandRefs)
+	commandRefs, commandRefsSlice := callocSlice[C.WGPUCommandBuffer](commandCount)
+	defer free(commandRefs)
 
-	commandRefsSlice := unsafe.Slice((*C.WGPUCommandBuffer)(commandRefs), commandCount)
 	for i, v := range commands {
 		commandRefsSlice[i] = v.ref
 	}
@@ -75,48 +49,47 @@ func (p *Queue) Submit(commands ...*CommandBuffer) (submissionIndex SubmissionIn
 	r := C.wgpuQueueSubmitForIndex(
 		p.ref,
 		C.size_t(commandCount),
-		(*C.WGPUCommandBuffer)(commandRefs),
+		commandRefs,
 	)
 	return SubmissionIndex(r)
 }
 
-func (p *Queue) WriteBuffer(buffer *Buffer, bufferOffset uint64, data []byte) (err error) {
-	var cb errorCallback = func(_ ErrorType, message string) {
-		err = errors.New("wgpu.(*Queue).WriteBuffer(): " + message)
-	}
-	errorCallbackHandle := cgo.NewHandle(cb)
-	defer errorCallbackHandle.Delete()
+func (p *Queue) TryWriteBuffer(buffer *Buffer, bufferOffset uint64, data []byte) error {
+	errh := acquireErrorCallback()
+	defer errh.Done()
 
 	size := len(data)
 	if size == 0 {
-		C.gowebgpu_queue_write_buffer(
+		C.go_wgpuQueueWriteBuffer(
+			p.device,
+			errh.ToPointer(),
 			p.ref,
 			buffer.ref,
 			C.uint64_t(bufferOffset),
 			nil,
 			0,
-			p.deviceRef,
-			unsafe.Pointer(&errorCallbackHandle),
 		)
-		return
+
+		return errh.ToError()
 	}
 
-	C.gowebgpu_queue_write_buffer(
+	C.go_wgpuQueueWriteBuffer(
+		p.device,
+		errh.ToPointer(),
 		p.ref,
 		buffer.ref,
 		C.uint64_t(bufferOffset),
 		unsafe.Pointer(&data[0]),
 		C.size_t(size),
-		p.deviceRef,
-		unsafe.Pointer(&errorCallbackHandle),
 	)
-	return
+
+	return errh.ToError()
 }
 
-func (p *Queue) WriteTexture(destination *ImageCopyTexture, data []byte, dataLayout *TextureDataLayout, writeSize *Extent3D) (err error) {
-	var dst C.WGPUImageCopyTexture
+func (p *Queue) TryWriteTexture(destination *TexelCopyTextureInfo, data []byte, dataLayout *TexelCopyBufferLayout, writeSize *Extent3D) error {
+	var dst C.WGPUTexelCopyTextureInfo
 	if destination != nil {
-		dst = C.WGPUImageCopyTexture{
+		dst = C.WGPUTexelCopyTextureInfo{
 			mipLevel: C.uint32_t(destination.MipLevel),
 			origin: C.WGPUOrigin3D{
 				x: C.uint32_t(destination.Origin.X),
@@ -130,9 +103,9 @@ func (p *Queue) WriteTexture(destination *ImageCopyTexture, data []byte, dataLay
 		}
 	}
 
-	var layout C.WGPUTextureDataLayout
+	var layout C.WGPUTexelCopyBufferLayout
 	if dataLayout != nil {
-		layout = C.WGPUTextureDataLayout{
+		layout = C.WGPUTexelCopyBufferLayout{
 			offset:       C.uint64_t(dataLayout.Offset),
 			bytesPerRow:  C.uint32_t(dataLayout.BytesPerRow),
 			rowsPerImage: C.uint32_t(dataLayout.RowsPerImage),
@@ -148,40 +121,35 @@ func (p *Queue) WriteTexture(destination *ImageCopyTexture, data []byte, dataLay
 		}
 	}
 
-	var cb errorCallback = func(_ ErrorType, message string) {
-		err = errors.New("wgpu.(*Queue).WriteTexture(): " + message)
-	}
-	errorCallbackHandle := cgo.NewHandle(cb)
-	defer errorCallbackHandle.Delete()
+	errh := acquireErrorCallback()
+	defer errh.Done()
 
 	size := len(data)
 	if size == 0 {
-		C.gowebgpu_queue_write_texture(
+		C.go_wgpuQueueWriteTexture(
+			p.device,
+			errh.ToPointer(),
 			p.ref,
 			&dst,
 			nil,
 			0,
 			&layout,
 			&writeExtent,
-			p.deviceRef,
-			unsafe.Pointer(&errorCallbackHandle),
 		)
-		return
+
+		return errh.ToError()
 	}
 
-	C.gowebgpu_queue_write_texture(
+	C.go_wgpuQueueWriteTexture(
+		p.device,
+		errh.ToPointer(),
 		p.ref,
 		&dst,
 		unsafe.Pointer(&data[0]),
 		C.size_t(size),
 		&layout,
 		&writeExtent,
-		p.deviceRef,
-		unsafe.Pointer(&errorCallbackHandle),
 	)
-	return
-}
 
-func (p *Queue) Release() {
-	C.gowebgpu_queue_release(p.ref, p.deviceRef)
+	return errh.ToError()
 }

@@ -2,43 +2,50 @@
 
 package wgpu
 
+import (
+	"errors"
+
+	_ "github.com/oliverbestmann/webgpu/libs-android"
+
+	_ "github.com/oliverbestmann/webgpu/libs-darwin"
+
+	_ "github.com/belluikit/webgpu/libs-ios"
+
+	_ "github.com/oliverbestmann/webgpu/libs-linux"
+
+	"runtime"
+
+	_ "github.com/belluikit/webgpu/libs-windows"
+)
+
 /*
 
 // Android
-#cgo android,amd64 LDFLAGS: -L${SRCDIR}/lib/android/amd64 -lwgpu_native
-#cgo android,386 LDFLAGS: -L${SRCDIR}/lib/android/386 -lwgpu_native
-#cgo android,arm64 LDFLAGS: -L${SRCDIR}/lib/android/arm64 -lwgpu_native
-#cgo android,arm LDFLAGS: -L${SRCDIR}/lib/android/arm -lwgpu_native
-
-#cgo android LDFLAGS: -landroid -lm -llog
+#cgo android,amd64 CFLAGS: -I${SRCDIR}/lib/android/amd64
+#cgo android,386 CFLAGS: -I${SRCDIR}/lib/android/386
+#cgo android,arm64 CFLAGS: -I${SRCDIR}/lib/android/arm64
+#cgo android,arm CFLAGS: -I${SRCDIR}/lib/android/arm
 
 // Linux
-#cgo linux,!android,amd64 LDFLAGS: -L${SRCDIR}/lib/linux/amd64 -lwgpu_native
-#cgo linux,!android,arm64 LDFLAGS: -L${SRCDIR}/lib/linux/arm64 -lwgpu_native
+#cgo linux,!android,amd64 CFLAGS: -I${SRCDIR}/lib/linux/amd64
+#cgo linux,!android,arm64 CFLAGS: -I${SRCDIR}/lib/linux/arm64
 
-#cgo linux,!android LDFLAGS: -lm -ldl
-
-// iOS. arm64 is a device slice by default; pass the `iossimulator` build tag for
-// an arm64 Simulator build (Apple Silicon), which links the simulator slice.
-// amd64 iOS is always the (Intel) Simulator. (trendvidia: iOS Simulator support.)
-#cgo ios,amd64 LDFLAGS: -L${SRCDIR}/lib/ios/amd64 -lwgpu_native
-#cgo ios,arm64,!iossimulator LDFLAGS: -L${SRCDIR}/lib/ios/arm64 -lwgpu_native
-#cgo ios,arm64,iossimulator LDFLAGS: -L${SRCDIR}/lib/iossimulator/arm64 -lwgpu_native
+// iOS
+#cgo ios,amd64 CFLAGS: -I${SRCDIR}/lib/ios/amd64
+#cgo ios,arm64 CFLAGS: -I${SRCDIR}/lib/ios/arm64
 
 // Darwin
-#cgo darwin,!ios,amd64 LDFLAGS: -L${SRCDIR}/lib/darwin/amd64 -lwgpu_native
-#cgo darwin,!ios,arm64 LDFLAGS: -L${SRCDIR}/lib/darwin/arm64 -lwgpu_native
-
-#cgo darwin LDFLAGS: -framework QuartzCore -framework Metal
+#cgo darwin,!ios,amd64 CFLAGS: -I${SRCDIR}/lib/darwin/amd64
+#cgo darwin,!ios,arm64 CFLAGS: -I${SRCDIR}/lib/darwin/arm64
+#cgo darwin,!ios       LDFLAGS: -framework Foundation
 
 // Windows
-#cgo windows,amd64 LDFLAGS: -L${SRCDIR}/lib/windows/amd64 -lwgpu_native
-#cgo windows,arm64 LDFLAGS: -L${SRCDIR}/lib/windows/arm64 -lwgpu_native
-
-#cgo windows LDFLAGS: -lopengl32 -lgdi32 -ld3dcompiler_47 -lws2_32 -luserenv -lbcrypt -lntdll -lole32 -loleaut32
+#cgo windows,amd64 CFLAGS: -I${SRCDIR}/lib/windows/amd64
+#cgo windows,arm64 CFLAGS: -I${SRCDIR}/lib/windows/arm64
+#cgo windows,386 CFLAGS: -I${SRCDIR}/lib/windows/386
 
 #include <stdio.h>
-#include "./lib/wgpu.h"
+#include <wgpu.h>
 
 #ifdef __ANDROID__
 #include <android/log.h>
@@ -97,27 +104,26 @@ func GetVersion() Version {
 	return Version(C.wgpuGetVersion())
 }
 
-type (
-	BindGroup       struct{ ref C.WGPUBindGroup }
-	BindGroupLayout struct{ ref C.WGPUBindGroupLayout }
-	CommandBuffer   struct{ ref C.WGPUCommandBuffer }
-	PipelineLayout  struct{ ref C.WGPUPipelineLayout }
-	QuerySet        struct{ ref C.WGPUQuerySet }
-	RenderBundle    struct{ ref C.WGPURenderBundle }
-	Sampler         struct{ ref C.WGPUSampler }
-	ShaderModule    struct{ ref C.WGPUShaderModule }
-	TextureView     struct{ ref C.WGPUTextureView }
-)
+func (g *Device) addRef() C.WGPUDevice {
+	if g.ref == nil {
+		panic(errors.New("device already released"))
+	}
 
-func (p *BindGroup) Release()       { C.wgpuBindGroupRelease(p.ref) }
-func (p *BindGroupLayout) Release() { C.wgpuBindGroupLayoutRelease(p.ref) }
-func (p *CommandBuffer) Release()   { C.wgpuCommandBufferRelease(p.ref) }
-func (p *PipelineLayout) Release()  { C.wgpuPipelineLayoutRelease(p.ref) }
-func (p *QuerySet) Release()        { C.wgpuQuerySetRelease(p.ref) }
-func (p *RenderBundle) Release()    { C.wgpuRenderBundleRelease(p.ref) }
-func (p *Sampler) Release()         { C.wgpuSamplerRelease(p.ref) }
-func (p *ShaderModule) Release()    { C.wgpuShaderModuleRelease(p.ref) }
-func (p *TextureView) Release()     { C.wgpuTextureViewRelease(p.ref) }
+	C.wgpuDeviceAddRef(g.ref)
+
+	return g.ref
+}
+
+type releaser interface{ release() }
+
+func releaseOnGC[T releaser](value T) T {
+	runtime.SetFinalizer(value, releaseNow)
+	return value
+}
+
+func releaseNow(value releaser) {
+	value.release()
+}
 
 // cBool converts the given Go bool to a C.WGPUBool.
 func cBool(b bool) C.WGPUBool {

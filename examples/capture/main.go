@@ -76,7 +76,7 @@ func main() {
 
 	bufferSize := bufferDimensions.paddedBytesPerRow * bufferDimensions.height
 	// The output buffer lets us retrieve the data as an array
-	outputBuffer, err := device.CreateBuffer(&wgpu.BufferDescriptor{
+	outputBuffer, err := device.TryCreateBuffer(&wgpu.BufferDescriptor{
 		Size:  bufferSize,
 		Usage: wgpu.BufferUsageMapRead | wgpu.BufferUsageCopyDst,
 	})
@@ -92,7 +92,7 @@ func main() {
 	}
 
 	// The render pipeline renders data into this texture
-	texture, err := device.CreateTexture(&wgpu.TextureDescriptor{
+	texture, err := device.TryCreateTexture(&wgpu.TextureDescriptor{
 		Size:          textureExtent,
 		MipLevelCount: 1,
 		SampleCount:   1,
@@ -106,13 +106,13 @@ func main() {
 	defer texture.Release()
 
 	// Set the background to be red
-	encoder, err := device.CreateCommandEncoder(nil)
+	encoder, err := device.TryCreateCommandEncoder(nil)
 	if err != nil {
 		panic(err)
 	}
 	defer encoder.Release()
 
-	textureView, err := texture.CreateView(nil)
+	textureView, err := texture.TryCreateView(nil)
 	if err != nil {
 		panic(err)
 	}
@@ -127,14 +127,14 @@ func main() {
 		}},
 	})
 	defer renderPass.Release()
-	renderPass.End()
+	renderPass.TryEnd()
 
 	// Copy the data from the texture to the buffer
-	encoder.CopyTextureToBuffer(
+	encoder.TryCopyTextureToBuffer(
 		texture.AsImageCopy(),
-		&wgpu.ImageCopyBuffer{
+		&wgpu.TexelCopyBufferInfo{
 			Buffer: outputBuffer,
-			Layout: wgpu.TextureDataLayout{
+			Layout: wgpu.TexelCopyBufferLayout{
 				Offset:       0,
 				BytesPerRow:  uint32(bufferDimensions.paddedBytesPerRow),
 				RowsPerImage: wgpu.CopyStrideUndefined,
@@ -143,7 +143,7 @@ func main() {
 		&textureExtent,
 	)
 
-	cmdBuffer, err := encoder.Finish(nil)
+	cmdBuffer, err := encoder.TryFinish(nil)
 	if err != nil {
 		panic(err)
 	}
@@ -151,12 +151,12 @@ func main() {
 
 	queue.Submit(cmdBuffer)
 
-	outputBuffer.MapAsync(wgpu.MapModeRead, 0, bufferSize, func(status wgpu.BufferMapAsyncStatus) {
-		if status != wgpu.BufferMapAsyncStatusSuccess {
+	outputBuffer.TryMapAsync(wgpu.MapModeRead, 0, bufferSize, func(status wgpu.MapAsyncStatus) {
+		if status != wgpu.MapAsyncStatusSuccess {
 			panic("failed to map buffer")
 		}
 	})
-	defer outputBuffer.Unmap()
+	defer outputBuffer.TryUnmap()
 
 	device.Poll(true, nil)
 

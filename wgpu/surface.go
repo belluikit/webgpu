@@ -3,57 +3,43 @@
 package wgpu
 
 /*
-
 #include <stdlib.h>
-#include "./lib/wgpu.h"
-
-extern void gowebgpu_error_callback_c(WGPUErrorType type, char const * message, void * userdata);
-
-static inline WGPUTexture gowebgpu_surface_get_current_texture(WGPUSurface surface, WGPUDevice device, WGPUSurfaceGetCurrentTextureStatus * status_out, void * error_userdata) {
-	WGPUSurfaceTexture ref;
-	wgpuDevicePushErrorScope(device, WGPUErrorFilter_Validation);
-	wgpuSurfaceGetCurrentTexture(surface, &ref);
-	wgpuDevicePopErrorScope(device, gowebgpu_error_callback_c, error_userdata);
-	if (status_out != NULL) {
-		*status_out = ref.status;
-	}
-	return ref.texture;
-}
-
+#include "gen_wgpu_wrappers.h"
 */
 import "C"
 import (
 	"errors"
-	"runtime/cgo"
+	"runtime"
 	"unsafe"
 )
 
-type Surface struct {
-	deviceRef C.WGPUDevice
-	ref       C.WGPUSurface
-}
-
-func (p *Surface) GetCapabilities(adapter *Adapter) (ret SurfaceCapabilities) {
+func (g *Surface) GetCapabilities(adapter *Adapter) (ret SurfaceCapabilities) {
 	var caps C.WGPUSurfaceCapabilities
-	C.wgpuSurfaceGetCapabilities(p.ref, adapter.ref, &caps)
+	C.wgpuSurfaceGetCapabilities(g.ref, adapter.ref, &caps)
 
 	if caps.alphaModeCount == 0 && caps.formatCount == 0 && caps.presentModeCount == 0 {
 		return
 	}
 	if caps.formatCount > 0 {
-		caps.formats = (*C.WGPUTextureFormat)(C.malloc(C.size_t(unsafe.Sizeof(C.WGPUTextureFormat(0))) * caps.formatCount))
-		defer C.free(unsafe.Pointer(caps.formats))
+		formats, formatsSlice := callocSlice[C.WGPUTextureFormat](int(caps.formatCount))
+		defer free(formats)
+		caps.formats = formats
+		_ = formatsSlice
 	}
 	if caps.presentModeCount > 0 {
-		caps.presentModes = (*C.WGPUPresentMode)(C.malloc(C.size_t(unsafe.Sizeof(C.WGPUPresentMode(0))) * caps.presentModeCount))
-		defer C.free(unsafe.Pointer(caps.presentModes))
+		presentModes, presentModesSlice := callocSlice[C.WGPUPresentMode](int(caps.presentModeCount))
+		defer free(presentModes)
+		caps.presentModes = presentModes
+		_ = presentModesSlice
 	}
 	if caps.alphaModeCount > 0 {
-		caps.alphaModes = (*C.WGPUCompositeAlphaMode)(C.malloc(C.size_t(unsafe.Sizeof(C.WGPUCompositeAlphaMode(0))) * caps.alphaModeCount))
-		defer C.free(unsafe.Pointer(caps.alphaModes))
+		alphaModes, alphaModesSlice := callocSlice[C.WGPUCompositeAlphaMode](int(caps.alphaModeCount))
+		defer free(alphaModes)
+		caps.alphaModes = alphaModes
+		_ = alphaModesSlice
 	}
 
-	C.wgpuSurfaceGetCapabilities(p.ref, adapter.ref, &caps)
+	C.wgpuSurfaceGetCapabilities(g.ref, adapter.ref, &caps)
 
 	if caps.formatCount > 0 {
 		formatsTmp := unsafe.Slice((*TextureFormat)(caps.formats), caps.formatCount)
@@ -74,78 +60,92 @@ func (p *Surface) GetCapabilities(adapter *Adapter) (ret SurfaceCapabilities) {
 	return
 }
 
-func (p *Surface) Configure(adapter *Adapter, device *Device, config *SurfaceConfiguration) {
-	p.deviceRef = device.ref
+func (g *Surface) Configure(device *Device, config *SurfaceConfiguration) {
+	if g.device != nil {
+		// release previously referenced device
+		C.wgpuDeviceRelease(g.device)
+		g.device = nil
+	}
+
+	g.device = device.addRef()
+
+	var pinner runtime.Pinner
+	defer pinner.Unpin()
 
 	var cfg *C.WGPUSurfaceConfiguration
 	if config != nil {
+		var nextInChain *C.WGPUSurfaceConfigurationExtras
+
+		if config.DesiredMaximumFrameLatency > 0 {
+			nextInChain = &C.WGPUSurfaceConfigurationExtras{
+				chain: C.WGPUChainedStruct{
+					sType: C.WGPUSType_SurfaceConfigurationExtras,
+				},
+				desiredMaximumFrameLatency: 1,
+			}
+
+			pinner.Pin(nextInChain)
+		}
+
 		cfg = &C.WGPUSurfaceConfiguration{
-			device:      p.deviceRef,
+			device:      g.device,
 			format:      C.WGPUTextureFormat(config.Format),
-			usage:       C.WGPUTextureUsageFlags(config.Usage),
+			usage:       C.WGPUTextureUsage(config.Usage),
 			alphaMode:   C.WGPUCompositeAlphaMode(config.AlphaMode),
 			width:       C.uint32_t(config.Width),
 			height:      C.uint32_t(config.Height),
 			presentMode: C.WGPUPresentMode(config.PresentMode),
+			nextInChain: (*C.WGPUChainedStruct)(unsafe.Pointer(nextInChain)),
 		}
-		viewFormatCount := len(config.ViewFormats)
-		if viewFormatCount > 0 {
-			viewFormats := C.malloc(C.size_t(unsafe.Sizeof(C.WGPUTextureFormat(0))) * C.size_t(viewFormatCount))
-			defer C.free(viewFormats)
 
-			viewFormatsSlice := unsafe.Slice((*TextureFormat)(viewFormats), viewFormatCount)
-			copy(viewFormatsSlice, config.ViewFormats)
+		if len(config.ViewFormats) > 0 {
+			pinner.Pin(&config.ViewFormats[0])
 
-			cfg.viewFormatCount = C.size_t(viewFormatCount)
-			cfg.viewFormats = (*C.WGPUTextureFormat)(viewFormats)
+			cfg.viewFormatCount = C.size_t(len(config.ViewFormats))
+			cfg.viewFormats = (*C.WGPUTextureFormat)(&config.ViewFormats[0])
 		}
 	}
 
-	C.wgpuSurfaceConfigure(p.ref, cfg)
+	C.wgpuSurfaceConfigure(g.ref, cfg)
 }
 
 // NOTE: you should typically not call [Texture.Release] on the returned texture.
 // Instead, you should call [TextureView.Release] on any [TextureView] you create from it.
-func (p *Surface) GetCurrentTexture() (*Texture, error) {
-	var err error = nil
-	var cb errorCallback = func(_ ErrorType, message string) {
-		err = errors.New("wgpu.(*Surface).GetCurrentTexture(): " + message)
+// You need to check the status of the returned texture, or use SurfaceTexture.Get.
+func (g *Surface) TryGetCurrentTexture() (SurfaceTexture, error) {
+	if g.device == nil {
+		return SurfaceTexture{}, errors.New("surface not configured")
 	}
-	errorCallbackHandle := cgo.NewHandle(cb)
-	defer errorCallbackHandle.Delete()
 
-	var status C.WGPUSurfaceGetCurrentTextureStatus
-	ref := C.gowebgpu_surface_get_current_texture(
-		p.ref,
-		p.deviceRef,
-		&status,
-		unsafe.Pointer(&errorCallbackHandle),
+	errh := acquireErrorCallback()
+	defer errh.Done()
+
+	var surfaceTexture C.WGPUSurfaceTexture
+	C.go_wgpuSurfaceGetCurrentTexture(
+		g.device,
+		errh.ToPointer(),
+		g.ref,
+		&surfaceTexture,
 	)
-	if err != nil {
-		if ref != nil {
-			C.wgpuTextureRelease(ref)
+	if err := errh.ToError(); err != nil {
+		if surfaceTexture.texture != nil {
+			C.wgpuTextureRelease(surfaceTexture.texture)
 		}
-		return nil, err
+
+		return SurfaceTexture{}, err
 	}
 
-	// A non-Success status (Timeout/Outdated/Lost/OutOfMemory/DeviceLost) leaves the
-	// texture null. Wrapping and using it would trap in wgpu-native as "invalid
-	// texture" (an abort, not a Go panic — unrecoverable). Report it so the caller
-	// can skip the frame and/or reconfigure the surface instead.
-	if ref == nil || SurfaceGetCurrentTextureStatus(status) != SurfaceGetCurrentTextureStatusSuccess {
-		if ref != nil {
-			C.wgpuTextureRelease(ref)
-		}
-		return nil, &SurfaceStatusError{Status: SurfaceGetCurrentTextureStatus(status)}
+	status := SurfaceGetCurrentTextureStatus(surfaceTexture.status)
+
+	var texture *Texture
+	if surfaceTexture.texture != nil {
+		C.wgpuDeviceAddRef(g.device)
+		texture = &Texture{device: g.device, ref: surfaceTexture.texture}
 	}
 
-	return &Texture{p.deviceRef, ref}, nil
+	return SurfaceTexture{Texture: texture, Status: status}, nil
 }
 
-func (p *Surface) Present() {
-	C.wgpuSurfacePresent(p.ref)
-}
-
-func (p *Surface) Release() {
-	C.wgpuSurfaceRelease(p.ref)
+func (g *Surface) Present() {
+	C.wgpuSurfacePresent(g.ref)
 }

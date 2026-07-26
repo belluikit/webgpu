@@ -70,7 +70,7 @@ func (g *RequestAdapterOptions) toJS() any {
 func (g *DeviceDescriptor) toJS() any {
 	result := make(map[string]any)
 	result["label"] = g.Label
-	result["requiredFeatures"] = mapSlice(g.RequiredFeatures, func(f FeatureName) any { return f })
+	result["requiredFeatures"] = mapSlice(g.RequiredFeatures, func(f FeatureName) any { return f.String() })
 	// result["requiredLimits"] = // TODO(kai): convert requiredLimits to JS
 	return result
 }
@@ -95,6 +95,9 @@ func (g *TextureDescriptor) toJS() any {
 		"format":        enumToJS(g.Format),
 		"mipLevelCount": g.MipLevelCount,
 		"sampleCount":   g.SampleCount,
+		"viewFormats": mapSlice(g.ViewFormats, func(f TextureFormat) any {
+			return enumToJS(f)
+		}),
 	}
 }
 
@@ -115,11 +118,22 @@ func (g *CommandEncoderDescriptor) toJS() any {
 	return map[string]any{"label": g.Label}
 }
 
+func (g *RenderBundleEncoderDescriptor) toJS() any {
+	return map[string]any{
+		"label":              g.Label,
+		"colorFormats":       mapSlice(g.ColorFormats, func(s TextureFormat) any { return enumToJS(s) }),
+		"depthStencilFormat": enumToJS(g.DepthStencilFormat),
+		"sampleCount":        g.SampleCount,
+		"depthReadOnly":      g.DepthReadOnly,
+		"stencilReadOnly":    g.StencilReadOnly,
+	}
+}
+
 func (g *CommandBufferDescriptor) toJS() any {
 	return map[string]any{"label": g.Label}
 }
 
-func (g BufferDescriptor) toJS() any {
+func (g *BufferDescriptor) toJS() any {
 	return map[string]any{
 		"label":            g.Label,
 		"size":             g.Size,
@@ -128,7 +142,7 @@ func (g BufferDescriptor) toJS() any {
 	}
 }
 
-func (g *ImageCopyBuffer) toJS() any {
+func (g *TexelCopyBufferInfo) toJS() any {
 	return map[string]any{
 		"buffer":       pointerToJS(g.Buffer),
 		"offset":       g.Layout.Offset,
@@ -137,7 +151,7 @@ func (g *ImageCopyBuffer) toJS() any {
 	}
 }
 
-func (g *ImageCopyTexture) toJS() any {
+func (g *TexelCopyTextureInfo) toJS() any {
 	return map[string]any{
 		"texture":  pointerToJS(g.Texture),
 		"mipLevel": g.MipLevel,
@@ -146,11 +160,19 @@ func (g *ImageCopyTexture) toJS() any {
 	}
 }
 
-func (g *TextureDataLayout) toJS() any {
+func (g *TexelCopyBufferLayout) toJS() any {
 	return map[string]any{
 		"offset":       g.Offset,
 		"bytesPerRow":  g.BytesPerRow,
 		"rowsPerImage": g.RowsPerImage,
+	}
+}
+
+func (g *QuerySetDescriptor) toJS() any {
+	return map[string]any{
+		"label": g.Label,
+		"type":  enumToJS(g.Type),
+		"count": g.Count,
 	}
 }
 
@@ -174,35 +196,31 @@ func (g *RenderPassColorAttachment) toJS() any {
 }
 
 func (g *RenderPassDepthStencilAttachment) toJS() any {
-	m := map[string]any{
+	result := map[string]any{
 		"view":              pointerToJS(g.View),
-		"depthLoadOp":       enumToJS(g.DepthLoadOp),
-		"depthStoreOp":      enumToJS(g.DepthStoreOp),
 		"depthClearValue":   g.DepthClearValue,
-		"depthReadOnly":     g.DepthReadOnly,
 		"stencilClearValue": g.StencilClearValue,
+		"depthReadOnly":     g.DepthReadOnly,
 		"stencilReadOnly":   g.StencilReadOnly,
 	}
-	// (trendvidia) Emit the stencil load/store ops only when set. A stencil-aspect
-	// format (e.g. Depth24PlusStencil8) REQUIRES them under strict (browser/Dawn)
-	// validation, while a depth-only format REJECTS them — so passing them
-	// unconditionally broke depth-only callers (the reason upstream commented
-	// them out). The zero value (LoadOp/StoreOp "Undefined") means unset.
-	if g.StencilLoadOp != LoadOpUndefined {
-		m["stencilLoadOp"] = enumToJS(g.StencilLoadOp)
+	// https://www.w3.org/TR/webgpu/#abstract-opdef-gpurenderpassdepthstencilattachment-gpurenderpassdepthstencilattachment-valid-usage
+	if !g.DepthReadOnly {
+		result["depthLoadOp"] = enumToJS(g.DepthLoadOp)
+		result["depthStoreOp"] = enumToJS(g.DepthStoreOp)
 	}
-	if g.StencilStoreOp != StoreOpUndefined {
-		m["stencilStoreOp"] = enumToJS(g.StencilStoreOp)
+	if !g.StencilReadOnly {
+		result["stencilLoadOp"] = enumToJS(g.StencilLoadOp)
+		result["stencilStoreOp"] = enumToJS(g.StencilStoreOp)
 	}
-	return m
+	return result
 }
 
 func (g *RenderPipelineDescriptor) toJS() any {
 	result := make(map[string]any)
-	if g.Layout == nil {
-		result["layout"] = "auto"
-	} else {
+	if g.Layout != nil {
 		result["layout"] = pointerToJS(g.Layout)
+	} else {
+		result["layout"] = "auto"
 	}
 	result["vertex"] = g.Vertex.toJS()
 	result["primitive"] = g.Primitive.toJS()
@@ -266,6 +284,6 @@ func limitsFromJS(j js.Value) Limits {
 		MaxComputeWorkgroupSizeY:          uint32(j.Get("maxComputeWorkgroupSizeY").Int()),
 		MaxComputeWorkgroupSizeZ:          uint32(j.Get("maxComputeWorkgroupSizeZ").Int()),
 		MaxComputeWorkgroupsPerDimension:  uint32(j.Get("maxComputeWorkgroupsPerDimension").Int()),
-		MaxPushConstantSize:               128,
+		MaxImmediateSize:                  128,
 	}
 }

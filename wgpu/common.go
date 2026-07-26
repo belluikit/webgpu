@@ -1,6 +1,13 @@
 package wgpu
 
-import "strconv"
+import (
+	"strconv"
+)
+
+//go:generate sh -ec "cd ../cmd/enums && go run . -i ../../wgpu/lib/linux/arm64/ -o ../../wgpu/gen_enums.go -pkg wgpu"
+//go:generate go run ../cmd/refcount Adapter BindGroup BindGroupLayout CommandBuffer ComputePipeline Device Instance PipelineLayout QuerySet RenderBundle RenderBundleEncoder RenderPipeline Sampler ShaderModule TextureView +Queue +Buffer +CommandEncoder +Texture +ComputePassEncoder +RenderPassEncoder +Surface
+//go:generate sh -ec "cd .. && go run ./cmd/wrappers"
+//go:generate sh -ec "cd .. && go run ./cmd/cgohints -i wgpu"
 
 // This file contains common types and constants
 
@@ -53,11 +60,8 @@ type Limits struct {
 	MaxComputeWorkgroupSizeZ                  uint32
 	MaxComputeWorkgroupsPerDimension          uint32
 
-	MaxPushConstantSize uint32
-}
-
-type SupportedLimits struct {
-	Limits Limits
+	MaxImmediateSize      uint32
+	MaxNonSamplerBindings uint32
 }
 
 // Color as described:
@@ -70,26 +74,27 @@ type Origin3D struct {
 	X, Y, Z uint32
 }
 
-// SurfaceConfiguration, corresponding to GPUCanvasConfiguration:
+// SurfaceConfiguration corresponding to GPUCanvasConfiguration:
 // https://gpuweb.github.io/gpuweb/#dictdef-gpucanvasconfiguration
 type SurfaceConfiguration struct {
-	Usage       TextureUsage
-	Format      TextureFormat
-	Width       uint32
-	Height      uint32
-	PresentMode PresentMode
-	AlphaMode   CompositeAlphaMode
-	ViewFormats []TextureFormat
+	Usage                      TextureUsage
+	Format                     TextureFormat
+	Width                      uint32
+	Height                     uint32
+	PresentMode                PresentMode
+	AlphaMode                  CompositeAlphaMode
+	ViewFormats                []TextureFormat
+	DesiredMaximumFrameLatency uint32
 }
 
-type ImageCopyTexture struct {
+type TexelCopyTextureInfo struct {
 	Texture  *Texture
 	MipLevel uint32
 	Origin   Origin3D
 	Aspect   TextureAspect
 }
 
-type TextureDataLayout struct {
+type TexelCopyBufferLayout struct {
 	Offset       uint64
 	BytesPerRow  uint32
 	RowsPerImage uint32
@@ -104,7 +109,6 @@ type Extent3D struct {
 type InstanceDescriptor struct {
 	Backends           InstanceBackend
 	Dx12ShaderCompiler Dx12Compiler
-	DxilPath           string
 	DxcPath            string
 }
 
@@ -127,18 +131,18 @@ type SurfaceCapabilities struct {
 	AlphaModes   []CompositeAlphaMode
 }
 
-type ShaderModuleWGSLDescriptor struct {
+type ShaderSourceWGSL struct {
 	Code string
 }
 
-type RequiredLimits struct {
-	Limits Limits
+type ShaderSourceSPIRV struct {
+	Code []byte
 }
 
 type DeviceDescriptor struct {
 	Label              string
 	RequiredFeatures   []FeatureName
-	RequiredLimits     *RequiredLimits
+	RequiredLimits     *Limits
 	DeviceLostCallback DeviceLostCallback
 	TracePath          string
 }
@@ -155,6 +159,7 @@ type TextureDescriptor struct {
 	Format        TextureFormat
 	MipLevelCount uint32
 	SampleCount   uint32
+	ViewFormats   []TextureFormat
 }
 
 // BufferDescriptor as described:
@@ -172,9 +177,16 @@ type BufferInitDescriptor struct {
 	Usage    BufferUsage
 }
 
-type BufferMapCallback func(BufferMapAsyncStatus)
+type BufferMapCallback func(MapAsyncStatus)
 
 type QueueWorkDoneCallback func(QueueWorkDoneStatus)
+
+type QuerySetDescriptor struct {
+	Label              string
+	Type               QueryType
+	Count              uint32
+	PipelineStatistics []PipelineStatisticName
+}
 
 // RenderPassDescriptor as described:
 // https://gpuweb.github.io/gpuweb/#dictdef-gpurenderpassdescriptor
@@ -222,6 +234,15 @@ type RenderPipelineDescriptor struct {
 	Fragment     *FragmentState
 }
 
+type RenderBundleEncoderDescriptor struct {
+	Label              string
+	ColorFormats       []TextureFormat
+	DepthStencilFormat TextureFormat
+	SampleCount        uint32
+	DepthReadOnly      bool
+	StencilReadOnly    bool
+}
+
 type CommandEncoderDescriptor struct {
 	Label string
 }
@@ -241,27 +262,22 @@ type CommandBufferDescriptor struct {
 	Label string
 }
 
-type WrappedSubmissionIndex struct {
-	Queue           *Queue
-	SubmissionIndex SubmissionIndex
-}
-
 type SubmissionIndex uint64
 
-type ImageCopyBuffer struct {
-	Layout TextureDataLayout
+type TexelCopyBufferInfo struct {
+	Layout TexelCopyBufferLayout
 	Buffer *Buffer
 }
 
 type AdapterInfo struct {
-	VendorId          uint32
-	VendorName        string
-	Architecture      string
-	DeviceId          uint32
-	Name              string
-	DriverDescription string
-	AdapterType       AdapterType
-	BackendType       BackendType
+	Vendor       string
+	Architecture string
+	Device       string
+	Description  string
+	AdapterType  AdapterType
+	BackendType  BackendType
+	VendorId     uint32
+	DeviceId     uint32
 }
 
 type SamplerDescriptor struct {
@@ -309,4 +325,21 @@ type BindGroupEntry struct {
 type ProgrammableStageDescriptor struct {
 	Module     *ShaderModule
 	EntryPoint string
+}
+
+type SurfaceTexture struct {
+	// Texture might not be set depending on Status
+	Texture *Texture
+
+	// Status of the texture returned
+	Status SurfaceGetCurrentTextureStatus
+}
+
+func (s *SurfaceTexture) IsStatusSuccess() bool {
+	return s.Status == SurfaceGetCurrentTextureStatusSuccessOptimal ||
+		s.Status == SurfaceGetCurrentTextureStatusSuccessSuboptimal
+}
+
+func (s *SurfaceTexture) Get() (nextTexture *Texture, success bool) {
+	return s.Texture, s.IsStatusSuccess()
 }

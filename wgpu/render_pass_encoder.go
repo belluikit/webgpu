@@ -3,35 +3,12 @@
 package wgpu
 
 /*
-
-#include <stdlib.h>
-#include "./lib/wgpu.h"
-
-extern void gowebgpu_error_callback_c(WGPUErrorType type, char const * message, void * userdata);
-
-static inline void gowebgpu_render_pass_encoder_end(WGPURenderPassEncoder renderPassEncoder, WGPUDevice device, void * error_userdata) {
-	wgpuDevicePushErrorScope(device, WGPUErrorFilter_Validation);
-	wgpuRenderPassEncoderEnd(renderPassEncoder);
-	wgpuDevicePopErrorScope(device, gowebgpu_error_callback_c, error_userdata);
-}
-
-static inline void gowebgpu_render_pass_encoder_release(WGPURenderPassEncoder renderPassEncoder, WGPUDevice device) {
-	wgpuDeviceRelease(device);
-	wgpuRenderPassEncoderRelease(renderPassEncoder);
-}
-
+#include "gen_wgpu_wrappers.h"
 */
 import "C"
 import (
-	"errors"
-	"runtime/cgo"
 	"unsafe"
 )
-
-type RenderPassEncoder struct {
-	deviceRef C.WGPUDevice
-	ref       C.WGPURenderPassEncoder
-}
 
 func (p *RenderPassEncoder) BeginOcclusionQuery(queryIndex uint32) {
 	C.wgpuRenderPassEncoderBeginOcclusionQuery(p.ref, C.uint32_t(queryIndex))
@@ -68,19 +45,22 @@ func (p *RenderPassEncoder) DrawIndirect(indirectBuffer *Buffer, indirectOffset 
 	C.wgpuRenderPassEncoderDrawIndirect(p.ref, indirectBuffer.ref, C.uint64_t(indirectOffset))
 }
 
-func (p *RenderPassEncoder) End() (err error) {
-	var cb errorCallback = func(_ ErrorType, message string) {
-		err = errors.New("wgpu.(*RenderPassEncoder).End(): " + message)
-	}
-	errorCallbackHandle := cgo.NewHandle(cb)
-	defer errorCallbackHandle.Delete()
+// TryEnd ends the current render pass encoder.
+// This will also release the instance, so it must not be used afterwards
+func (p *RenderPassEncoder) TryEnd() error {
+	errh := acquireErrorCallback()
+	defer errh.Done()
 
-	C.gowebgpu_render_pass_encoder_end(
+	C.go_wgpuRenderPassEncoderEnd(
+		p.device,
+		errh.ToPointer(),
 		p.ref,
-		p.deviceRef,
-		unsafe.Pointer(&errorCallbackHandle),
 	)
-	return
+
+	// also release the render pass at this point
+	p.Release()
+
+	return errh.ToError()
 }
 
 func (p *RenderPassEncoder) EndOcclusionQuery() {
@@ -98,22 +78,24 @@ func (p *RenderPassEncoder) ExecuteBundles(bundles ...*RenderBundle) {
 		return
 	}
 
-	bundlesPtr := C.malloc(C.size_t(bundlesCount) * C.size_t(unsafe.Sizeof(C.WGPURenderBundle(nil))))
-	defer C.free(bundlesPtr)
+	bundlesPtr, bundlesSlice := callocSlice[C.WGPURenderBundle](bundlesCount)
+	defer free(bundlesPtr)
 
-	bundlesSlice := unsafe.Slice((*C.WGPURenderBundle)(bundlesPtr), bundlesCount)
 	for i, v := range bundles {
 		bundlesSlice[i] = v.ref
 	}
 
-	C.wgpuRenderPassEncoderExecuteBundles(p.ref, C.size_t(bundlesCount), (*C.WGPURenderBundle)(bundlesPtr))
+	C.wgpuRenderPassEncoderExecuteBundles(p.ref, C.size_t(bundlesCount), bundlesPtr)
 }
 
 func (p *RenderPassEncoder) InsertDebugMarker(markerLabel string) {
 	markerLabelStr := C.CString(markerLabel)
-	defer C.free(unsafe.Pointer(markerLabelStr))
+	defer free(markerLabelStr)
 
-	C.wgpuRenderPassEncoderInsertDebugMarker(p.ref, markerLabelStr)
+	C.wgpuRenderPassEncoderInsertDebugMarker(p.ref, C.WGPUStringView{
+		data:   markerLabelStr,
+		length: C.WGPU_STRLEN,
+	})
 }
 
 func (p *RenderPassEncoder) PopDebugGroup() {
@@ -122,9 +104,12 @@ func (p *RenderPassEncoder) PopDebugGroup() {
 
 func (p *RenderPassEncoder) PushDebugGroup(groupLabel string) {
 	groupLabelStr := C.CString(groupLabel)
-	defer C.free(unsafe.Pointer(groupLabelStr))
+	defer free(groupLabelStr)
 
-	C.wgpuRenderPassEncoderPushDebugGroup(p.ref, groupLabelStr)
+	C.wgpuRenderPassEncoderPushDebugGroup(p.ref, C.WGPUStringView{
+		data:   groupLabelStr,
+		length: C.WGPU_STRLEN,
+	})
 }
 
 func (p *RenderPassEncoder) SetBindGroup(groupIndex uint32, group *BindGroup, dynamicOffsets []uint32) {
@@ -208,25 +193,23 @@ func (p *RenderPassEncoder) SetViewport(x, y, width, height, minDepth, maxDepth 
 	)
 }
 
-func (p *RenderPassEncoder) SetPushConstants(stages ShaderStage, offset uint32, data []byte) {
+func (p *RenderPassEncoder) SetImmediates(offset uint32, data []byte) {
 	size := len(data)
 	if size == 0 {
-		C.wgpuRenderPassEncoderSetPushConstants(
+		C.wgpuRenderPassEncoderSetImmediates(
 			p.ref,
-			C.WGPUShaderStageFlags(stages),
 			C.uint32_t(offset),
-			0,
 			nil,
+			0,
 		)
 		return
 	}
 
-	C.wgpuRenderPassEncoderSetPushConstants(
+	C.wgpuRenderPassEncoderSetImmediates(
 		p.ref,
-		C.WGPUShaderStageFlags(stages),
 		C.uint32_t(offset),
-		C.uint32_t(size),
 		unsafe.Pointer(&data[0]),
+		C.size_t(size),
 	)
 }
 
@@ -268,8 +251,4 @@ func (p *RenderPassEncoder) MultiDrawIndexedIndirectCount(encoder *RenderPassEnc
 		C.uint64_t(countBufferOffset),
 		C.uint32_t(maxCount),
 	)
-}
-
-func (p *RenderPassEncoder) Release() {
-	C.gowebgpu_render_pass_encoder_release(p.ref, p.deviceRef)
 }

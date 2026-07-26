@@ -5,37 +5,18 @@ package wgpu
 /*
 
 #include <stdlib.h>
-#include "./lib/wgpu.h"
+#include "gen_wgpu_wrappers.h"
 
-extern void gowebgpu_error_callback_c(WGPUErrorType type, char const * message, void * userdata);
+#cgo noescape wgpuTextureViewRelease
+#cgo nocallback wgpuTextureViewRelease
 
-static inline WGPUTextureView gowebgpu_texture_create_view(WGPUTexture texture, WGPUTextureViewDescriptor const * descriptor, WGPUDevice device, void * error_userdata) {
-	WGPUTextureView ref = NULL;
-	wgpuDevicePushErrorScope(device, WGPUErrorFilter_Validation);
-	ref = wgpuTextureCreateView(texture, descriptor);
-	wgpuDevicePopErrorScope(device, gowebgpu_error_callback_c, error_userdata);
-	return ref;
-}
-
-static inline void gowebgpu_texture_release(WGPUTexture texture, WGPUDevice device) {
-	wgpuDeviceRelease(device);
-	wgpuTextureRelease(texture);
-}
+#cgo noescape go_wgpuTextureCreateView
+#cgo nocallback go_wgpuTextureCreateView
 
 */
 import "C"
-import (
-	"errors"
-	"runtime/cgo"
-	"unsafe"
-)
 
-type Texture struct {
-	deviceRef C.WGPUDevice
-	ref       C.WGPUTexture
-}
-
-func (p *Texture) CreateView(descriptor *TextureViewDescriptor) (*TextureView, error) {
+func (g *Texture) TryCreateView(descriptor *TextureViewDescriptor) (*TextureView, error) {
 	var desc *C.WGPUTextureViewDescriptor
 
 	if descriptor != nil {
@@ -49,71 +30,60 @@ func (p *Texture) CreateView(descriptor *TextureViewDescriptor) (*TextureView, e
 			aspect:          C.WGPUTextureAspect(descriptor.Aspect),
 		}
 
-		if descriptor.Label != "" {
-			label := C.CString(descriptor.Label)
-			defer C.free(unsafe.Pointer(label))
-
-			desc.label = label
-		}
+		label := stringViewOf(descriptor.Label)
+		defer label.Release()
+		desc.label = label.ToC()
 	}
 
-	var err error = nil
-	var cb errorCallback = func(_ ErrorType, message string) {
-		err = errors.New("wgpu.(*Texture).CreateView(): " + message)
-	}
-	errorCallbackHandle := cgo.NewHandle(cb)
-	defer errorCallbackHandle.Delete()
+	errh := acquireErrorCallback()
+	defer errh.Done()
 
-	ref := C.gowebgpu_texture_create_view(
-		p.ref,
+	ref := C.go_wgpuTextureCreateView(
+		g.device,
+		errh.ToPointer(),
+		g.ref,
 		desc,
-		p.deviceRef,
-		unsafe.Pointer(&errorCallbackHandle),
 	)
-	if err != nil {
+	if err := errh.ToError(); err != nil {
 		C.wgpuTextureViewRelease(ref)
 		return nil, err
 	}
 
-	return &TextureView{ref}, nil
+	return releaseOnGC(&TextureView{ref: ref}), nil
 }
 
-func (p *Texture) Destroy() {
-	C.wgpuTextureDestroy(p.ref)
+func (g *Texture) Destroy() {
+	C.wgpuTextureDestroy(g.ref)
 }
 
-func (p *Texture) GetDepthOrArrayLayers() uint32 {
-	return uint32(C.wgpuTextureGetDepthOrArrayLayers(p.ref))
+func (g *Texture) GetDepthOrArrayLayers() uint32 {
+	return uint32(C.wgpuTextureGetDepthOrArrayLayers(g.ref))
 }
 
-func (p *Texture) GetDimension() TextureDimension {
-	return TextureDimension(C.wgpuTextureGetDimension(p.ref))
+func (g *Texture) GetDimension() TextureDimension {
+	return TextureDimension(C.wgpuTextureGetDimension(g.ref))
 }
 
-func (p *Texture) GetFormat() TextureFormat {
-	return TextureFormat(C.wgpuTextureGetFormat(p.ref))
+func (g *Texture) GetFormat() TextureFormat {
+	return TextureFormat(C.wgpuTextureGetFormat(g.ref))
 }
 
-func (p *Texture) GetHeight() uint32 {
-	return uint32(C.wgpuTextureGetHeight(p.ref))
+func (g *Texture) GetHeight() uint32 {
+	return uint32(C.wgpuTextureGetHeight(g.ref))
 }
 
-func (p *Texture) GetMipLevelCount() uint32 {
-	return uint32(C.wgpuTextureGetMipLevelCount(p.ref))
+func (g *Texture) GetMipLevelCount() uint32 {
+	return uint32(C.wgpuTextureGetMipLevelCount(g.ref))
 }
 
-func (p *Texture) GetSampleCount() uint32 {
-	return uint32(C.wgpuTextureGetSampleCount(p.ref))
+func (g *Texture) GetSampleCount() uint32 {
+	return uint32(C.wgpuTextureGetSampleCount(g.ref))
 }
 
-func (p *Texture) GetUsage() TextureUsage {
-	return TextureUsage(C.wgpuTextureGetUsage(p.ref))
+func (g *Texture) GetUsage() TextureUsage {
+	return TextureUsage(C.wgpuTextureGetUsage(g.ref))
 }
 
-func (p *Texture) GetWidth() uint32 {
-	return uint32(C.wgpuTextureGetWidth(p.ref))
-}
-
-func (p *Texture) Release() {
-	C.gowebgpu_texture_release(p.ref, p.deviceRef)
+func (g *Texture) GetWidth() uint32 {
+	return uint32(C.wgpuTextureGetWidth(g.ref))
 }

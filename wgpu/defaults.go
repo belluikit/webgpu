@@ -33,6 +33,6 @@ func DefaultLimits() Limits {
 		MaxComputeWorkgroupSizeY:                  LimitU32Undefined,
 		MaxComputeWorkgroupSizeZ:                  LimitU32Undefined,
 		MaxComputeWorkgroupsPerDimension:          LimitU32Undefined,
-		MaxPushConstantSize:                       LimitU32Undefined,
+		MaxImmediateSize:                          LimitU32Undefined,
 	}
 }

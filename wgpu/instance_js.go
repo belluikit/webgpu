@@ -10,13 +10,6 @@ import (
 	"github.com/belluikit/webgpu/jsx"
 )
 
-// Instance as described:
-// https://gpuweb.github.io/gpuweb/#gpu-interface
-// (Instance is called GPU in js)
-type Instance struct {
-	jsValue js.Value
-}
-
 func CreateInstance(descriptor *InstanceDescriptor) *Instance {
 	gpu := js.Global().Get("navigator").Get("gpu")
 	if !gpu.Truthy() {
@@ -26,7 +19,7 @@ func CreateInstance(descriptor *InstanceDescriptor) *Instance {
 	return &Instance{jsValue: gpu}
 }
 
-func (g Instance) RequestAdapter(options *RequestAdapterOptions) (*Adapter, error) {
+func (g *Instance) RequestAdapter(options *RequestAdapterOptions) (*Adapter, error) {
 	adapter, ok := jsx.Await(g.jsValue.Call("requestAdapter", pointerToJS(options)))
 	if !ok || !adapter.Truthy() {
 		return nil, fmt.Errorf("no WebGPU adapter avaliable")
@@ -34,7 +27,7 @@ func (g Instance) RequestAdapter(options *RequestAdapterOptions) (*Adapter, erro
 	return &Adapter{jsValue: adapter}, nil
 }
 
-func (g Instance) EnumerateAdapters(options *InstanceEnumerateAdapterOptons) []*Adapter {
+func (g *Instance) EnumerateAdapters(options *InstanceEnumerateAdapterOptons) []*Adapter {
 	a, err := g.RequestAdapter(&RequestAdapterOptions{})
 	if err != nil {
 		log.Println(err)
@@ -51,7 +44,7 @@ type SurfaceDescriptor struct {
 	Label string
 }
 
-func (g Instance) CreateSurface(descriptor *SurfaceDescriptor) *Surface {
+func (g *Instance) CreateSurface(descriptor *SurfaceDescriptor) *Surface {
 	if descriptor.Canvas.IsUndefined() {
 		panic("wgpu.Instance.CreateSurface: descriptor.Canvas must be specified")
 	}
@@ -59,6 +52,4 @@ func (g Instance) CreateSurface(descriptor *SurfaceDescriptor) *Surface {
 	return &Surface{jsContext}
 }
 
-func (g Instance) GenerateReport() any { return nil } // no-op
-
-func (g Instance) Release() {} // no-op
+func (g *Instance) GenerateReport() any { return nil } // no-op

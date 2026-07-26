@@ -5,8 +5,8 @@ package wgpuglfw
 import (
 	"unsafe"
 
+	"github.com/go-gl/glfw/v3.4/glfw"
 	"github.com/belluikit/webgpu/wgpu"
-	"github.com/go-gl/glfw/v3.3/glfw"
 )
 
 /*
@@ -31,7 +31,7 @@ import "C"
 
 func GetSurfaceDescriptor(w *glfw.Window) *wgpu.SurfaceDescriptor {
 	return &wgpu.SurfaceDescriptor{
-		MetalLayer: &wgpu.SurfaceDescriptorFromMetalLayer{
+		MetalLayer: &wgpu.SurfaceSourceMetalLayer{
 			Layer: unsafe.Pointer(C.metalLayerFromNSWindow((C.CFTypeRef)(unsafe.Pointer(w.GetCocoaWindow())))),
 		},
 	}

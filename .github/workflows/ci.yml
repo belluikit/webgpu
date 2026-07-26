@@ -3,6 +3,7 @@ name: CI
 on:
   push:
     branches: ["main"]
+
   pull_request:
 
 jobs:
@@ -11,6 +12,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       CGO_ENABLED: "1"
+
     strategy:
       fail-fast: false
       matrix:
@@ -20,36 +22,71 @@ jobs:
             run_examples: true
             setup_env: |
               sudo apt-get update
-              sudo apt-get install -f -y libegl1-mesa-dev mesa-vulkan-drivers
+              sudo apt-get install -f -y libegl1-mesa-dev mesa-vulkan-drivers \
+                libasound2-dev libxcursor-dev libxi-dev libxinerama-dev libxrandr-dev libxxf86vm-dev \
+                libxkbcommon-dev libwayland-dev
+
           - os: macos-latest
             name: Darwin
             run_examples: false # macos vm doesn't have software metal api
+
           - os: windows-latest
             name: Windows
             run_examples: true
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
           go-version: "stable"
+
       - name: Setup Environment
         run: ${{ matrix.setup_env }}
         shell: bash
+
       - name: Run tests
         run: |
-          set -x;
-          cd wgpu;
-          go test -x;
+          set -x
+          cd wgpu
+          go vet ./...
+          go test ./...
         shell: bash
+
       - name: Run examples
         if: ${{ matrix.run_examples }}
         run: |
-          set -x;
-          export WGPU_FORCE_FALLBACK_ADAPTER=1;
-          export WGPU_LOG_LEVEL=TRACE;
-          go run github.com/belluikit/webgpu/examples/compute;
-          go run github.com/belluikit/webgpu/examples/capture;
-          go run github.com/belluikit/webgpu/examples/adapters;
+          set -x
+          export WGPU_FORCE_FALLBACK_ADAPTER=1
+          export WGPU_LOG_LEVEL=TRACE
+          go run ./examples/adapters
+          go run ./examples/compute
+          go run ./examples/capture
+
+          go build ./examples/triangle
+          go build ./examples/boids
+          go build ./examples/cube
+
         shell: bash
+
+  test-build-js:
+    name: "WASM"
+    runs-on: ubuntu-latest
+    env:
+      GOOS: js
+      GOARCH: wasm
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "stable"
+
+      - name: Build a wasm file
+        run: |
+          go build ./examples/triangle

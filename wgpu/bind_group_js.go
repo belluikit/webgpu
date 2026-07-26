@@ -68,7 +68,7 @@ func (g StorageTextureBindingLayout) toJS() any {
 
 // ExternalTextureBindingLayout as described:
 type ExternalTextureBindingLayout struct {
-	jsValue js.Value
+	jsValue any
 }
 
 func (g ExternalTextureBindingLayout) toJS() any {
@@ -100,7 +100,7 @@ func (g BindGroupLayoutEntry) toJS() any {
 		result["texture"] = g.Texture.toJS()
 	case g.StorageTexture != StorageTextureBindingLayout{}:
 		result["storageTexture"] = g.StorageTexture.toJS()
-	case !g.ExternalTexture.jsValue.IsUndefined():
+	case !g.ExternalTexture.jsValue.(js.Value).IsUndefined():
 		result["externalTexture"] = g.ExternalTexture.toJS()
 	}
 	return result
@@ -113,18 +113,6 @@ func (g BindGroupLayoutDescriptor) toJS() any {
 		}),
 	}
 }
-
-// BindGroupLayout as described:
-// https://gpuweb.github.io/gpuweb/#gpubindgrouplayout
-type BindGroupLayout struct {
-	jsValue js.Value
-}
-
-func (g BindGroupLayout) toJS() any {
-	return g.jsValue
-}
-
-func (g BindGroupLayout) Release() {} // no-op
 
 func (g BindGroupEntry) toJS() any {
 	result := make(map[string]any)
@@ -151,16 +139,4 @@ func (g BindGroupDescriptor) toJS() any {
 			return entry.toJS()
 		}),
 	}
-}
-
-// BindGroup as described:
-// https://gpuweb.github.io/gpuweb/#gpubindgroup
-type BindGroup struct {
-	jsValue js.Value
-}
-
-func (g BindGroup) Release() {} // no-op
-
-func (g BindGroup) toJS() any {
-	return g.jsValue
 }

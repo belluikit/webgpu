@@ -22,7 +22,7 @@ func (g CanvasContext) toJS() any {
 	return g.jsValue
 }
 
-// GetCurrentTexture as described:
+// TryGetCurrentTexture as described:
 // https://gpuweb.github.io/gpuweb/#dom-gpucanvascontext-getcurrenttexture
 func (g CanvasContext) GetCurrentTexture() Texture {
 	jsTexture := g.jsValue.Call("getCurrentTexture")
