@@ -1,7 +1,24 @@
-[![Go Reference](https://pkg.go.dev/badge/github.com/oliverbestmann/webgpu/wgpu.svg)](https://pkg.go.dev/github.com/oliverbestmann/webgpu/wgpu)
-![CI workflow](https://github.com/oliverbestmann/webgpu/actions/workflows/ci.yml/badge.svg)
+# WebGPU (belluikit fork)
 
-# WebGPU
+This is [belluikit/webgpu](https://github.com/belluikit/webgpu), the WebGPU
+bindings [Bellui](https://github.com/belluikit/bellui) renders through by default
+(`//go:build !gl`). It forks [oliverbestmann/webgpu](https://github.com/oliverbestmann/webgpu),
+which is the maintained continuation of the `rajveermalviya/go-webgpu` →
+`cogentcore/webgpu` lineage.
+
+The fork exists only to add two platform slices upstream does not ship, both of
+which Bellui targets:
+
+| Delta | Why |
+|---|---|
+| `libs-ios` branch: `arm64-simulator/`, behind the `iossimulator` build tag | Go builds device *and* Simulator as `GOOS=ios/GOARCH=arm64`, but their Mach-O platforms differ, so the device archive cannot link a Simulator binary. Upstream ships device arm64 + Intel-simulator amd64 only. The slice is the `ios-aarch64-simulator` build from the same wgpu-native release. |
+| `libs-windows` branch: `arm64/libwgpu_native.a` built for the GNU (gnullvm) ABI | Upstream ships an aarch64-pc-windows-**MSVC** lib whose SEH/vcruntime C++ EH cannot be linked by the llvm-mingw toolchain Go/cgo uses on windows/arm64. Rebuilt by `.github/workflows/build-wgpu-windows-arm64.yml`. |
+
+Everything else — the bindings themselves and the android/darwin/linux static
+libraries — is consumed from upstream unchanged, so upstream fixes arrive by
+version bump rather than by merge. Keep the `ob` remote for syncing.
+
+---
 
 Current upstream version: v29.0.0.0
 

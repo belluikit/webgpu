@@ -10,9 +10,9 @@ import (
 	"unsafe"
 
 	"github.com/go-gl/glfw/v3.4/glfw"
-	"github.com/oliverbestmann/webgpu/examples/internal/glm"
-	"github.com/oliverbestmann/webgpu/wgpu"
-	"github.com/oliverbestmann/webgpu/wgpuglfw"
+	"github.com/belluikit/webgpu/examples/internal/glm"
+	"github.com/belluikit/webgpu/wgpu"
+	"github.com/belluikit/webgpu/wgpuglfw"
 
 	_ "embed"
 )

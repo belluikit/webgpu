@@ -9,13 +9,13 @@ import (
 
 	_ "github.com/oliverbestmann/webgpu/libs-darwin"
 
-	_ "github.com/oliverbestmann/webgpu/libs-ios"
+	_ "github.com/belluikit/webgpu/libs-ios"
 
 	_ "github.com/oliverbestmann/webgpu/libs-linux"
 
 	"runtime"
 
-	_ "github.com/oliverbestmann/webgpu/libs-windows"
+	_ "github.com/belluikit/webgpu/libs-windows"
 )
 
 /*

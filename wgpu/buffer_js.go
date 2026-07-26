@@ -5,7 +5,7 @@ package wgpu
 import (
 	"syscall/js"
 
-	"github.com/oliverbestmann/webgpu/jsx"
+	"github.com/belluikit/webgpu/jsx"
 )
 
 // Destroy as described:

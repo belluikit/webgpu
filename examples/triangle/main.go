@@ -5,7 +5,7 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/oliverbestmann/webgpu/wgpu"
+	"github.com/belluikit/webgpu/wgpu"
 
 	_ "embed"
 )
