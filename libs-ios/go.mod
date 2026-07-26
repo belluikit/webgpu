@@ -1,1 +1,1 @@
-module github.com/oliverbestmann/webgpu/libs-ios
+module github.com/belluikit/webgpu/libs-ios
