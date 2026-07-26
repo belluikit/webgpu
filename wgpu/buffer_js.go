@@ -5,7 +5,7 @@ package wgpu
 import (
 	"syscall/js"
 
-	"github.com/trendvidia/webgpu/jsx"
+	"github.com/belluikit/webgpu/jsx"
 )
 
 // Buffer as described:

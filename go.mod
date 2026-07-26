@@ -1,4 +1,4 @@
-module github.com/trendvidia/webgpu
+module github.com/belluikit/webgpu
 
 go 1.22
 

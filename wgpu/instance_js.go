@@ -7,7 +7,7 @@ import (
 	"log"
 	"syscall/js"
 
-	"github.com/trendvidia/webgpu/jsx"
+	"github.com/belluikit/webgpu/jsx"
 )
 
 // Instance as described:

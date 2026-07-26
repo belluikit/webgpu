@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/trendvidia/webgpu/wgpu"
-	"github.com/trendvidia/webgpu/wgpuglfw"
+	"github.com/belluikit/webgpu/wgpu"
+	"github.com/belluikit/webgpu/wgpuglfw"
 	"github.com/go-gl/glfw/v3.3/glfw"
 
 	_ "embed"

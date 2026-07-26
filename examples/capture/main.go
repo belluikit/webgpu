@@ -6,7 +6,7 @@ import (
 	"os"
 	"unsafe"
 
-	"github.com/trendvidia/webgpu/wgpu"
+	"github.com/belluikit/webgpu/wgpu"
 )
 
 var forceFallbackAdapter = os.Getenv("WGPU_FORCE_FALLBACK_ADAPTER") == "1"

@@ -5,7 +5,7 @@ package wgpuglfw
 import (
 	"unsafe"
 
-	"github.com/trendvidia/webgpu/wgpu"
+	"github.com/belluikit/webgpu/wgpu"
 	"github.com/go-gl/glfw/v3.3/glfw"
 )
 

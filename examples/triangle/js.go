@@ -6,7 +6,7 @@ import (
 	"syscall/js"
 	"time"
 
-	"github.com/trendvidia/webgpu/wgpu"
+	"github.com/belluikit/webgpu/wgpu"
 )
 
 type window struct{}

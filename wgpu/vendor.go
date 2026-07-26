@@ -3,5 +3,5 @@
 package wgpu
 
 import (
-	_ "github.com/trendvidia/webgpu/wgpu/lib"
+	_ "github.com/belluikit/webgpu/wgpu/lib"
 )

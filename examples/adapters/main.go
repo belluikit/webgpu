@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/trendvidia/webgpu/wgpu"
+	"github.com/belluikit/webgpu/wgpu"
 )
 
 func main() {

@@ -4,7 +4,7 @@ import (
 	"os"
 	"runtime"
 
-	"github.com/trendvidia/webgpu/wgpu"
+	"github.com/belluikit/webgpu/wgpu"
 
 	_ "embed"
 )
