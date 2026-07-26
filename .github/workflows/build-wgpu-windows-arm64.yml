@@ -60,6 +60,14 @@ jobs:
           git clone --recursive --branch "$WGPU_NATIVE_REF" --depth 1 https://github.com/gfx-rs/wgpu-native.git tmp
           cd tmp
 
+          # wgpu-native pins its own Rust in rust-toolchain.toml, and cargo honours
+          # that pin over the toolchain the setup step installed — so the target has
+          # to be added to the *pinned* toolchain, from inside the checkout. Without
+          # this the build dies on "the `aarch64-pc-windows-gnullvm` target may not
+          # be installed" while compiling windows-link.
+          rustup show
+          rustup target add aarch64-pc-windows-gnullvm
+
           # Bump bindgen so it understands a modern libclang AST (0.70
           # mis-traverses recent clang -> opaque structs). Build-only dep, does not
           # change the emitted FFI ABI.
