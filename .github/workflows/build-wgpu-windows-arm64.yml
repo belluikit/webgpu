@@ -42,14 +42,21 @@ jobs:
           choco install -y --force llvm | exit 0
           echo "LIBCLANG_PATH=C:\Program Files\LLVM\lib" >> $GITHUB_ENV
 
-          # llvm-mingw supplies the aarch64-w64-mingw32 sysroot bindgen parses
-          # against. Parse in GNU mode (--target=aarch64-w64-mingw32): mingw's
-          # vadefs.h only has an MSVC-macro branch for ARM64, so an MSVC-target
-          # parse yields opaque structs.
+          # llvm-mingw supplies the headers bindgen parses against. Parse in GNU
+          # mode (--target=aarch64-w64-mingw32): mingw's vadefs.h has no GNU branch
+          # for ARM64, so an MSVC-target parse over these headers dies with
+          # "VARARGS not implemented for this TARGET".
+          #
+          # The sysroot is the toolchain ROOT, not the per-target directory: recent
+          # llvm-mingw keeps one shared header tree at <root>/include and only libs
+          # under <root>/aarch64-w64-mingw32. Pointing at the per-target dir gives
+          # "'math.h' file not found". (Verified by building this natively on a
+          # Windows-on-ARM host — belluikit/bellui#1.)
           LLVM_MINGW=llvm-mingw-20250430-ucrt-x86_64
           curl -sSL -o llvm-mingw.zip https://github.com/mstorsjo/llvm-mingw/releases/download/20250430/$LLVM_MINGW.zip
           7z x llvm-mingw.zip -oC:/ >/dev/null
-          SYSROOT="C:/$LLVM_MINGW/aarch64-w64-mingw32"
+          SYSROOT="C:/$LLVM_MINGW"
+          test -f "$SYSROOT/include/math.h" || { echo "unexpected llvm-mingw layout: no $SYSROOT/include/math.h" >&2; exit 1; }
           echo "BINDGEN_EXTRA_CLANG_ARGS_aarch64_pc_windows_gnullvm=--target=aarch64-w64-mingw32 --sysroot=$SYSROOT" >> $GITHUB_ENV
 
       - name: Build
