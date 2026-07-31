@@ -5,13 +5,13 @@ package wgpu
 import (
 	"errors"
 
-	_ "github.com/oliverbestmann/webgpu/libs-android"
+	_ "github.com/belluikit/webgpu/libs-android"
 
-	_ "github.com/oliverbestmann/webgpu/libs-darwin"
+	_ "github.com/belluikit/webgpu/libs-darwin"
 
 	_ "github.com/belluikit/webgpu/libs-ios"
 
-	_ "github.com/oliverbestmann/webgpu/libs-linux"
+	_ "github.com/belluikit/webgpu/libs-linux"
 
 	"runtime"
 
