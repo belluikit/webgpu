@@ -1,1 +1,1 @@
-module github.com/oliverbestmann/webgpu/libs-android
+module github.com/belluikit/webgpu/libs-android
