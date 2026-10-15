@@ -5,6 +5,15 @@ set -ex -o pipefail
 # gets the prebuilt release files from wgpu-native and installs
 # the header files to wgpu/lib.
 # the library files are pushed to branches according to the arch.
+#
+# belluikit fork: two slices on the libs-* branches are NOT produced by this
+# script and must be refreshed by hand on a version bump: the iOS arm64
+# Simulator slice (libs-ios/arm64-simulator, skipped below) and the GNU-ABI
+# windows/arm64 archive (libs-windows/arm64/libwgpu_native.a, built by
+# .github/workflows/build-wgpu-windows-arm64.yml). The windows-aarch64 line
+# below still copies upstream's MSVC wgpu_native.lib, which the script would
+# then push next to the GNU archive, so do not run it unmodified for a bump.
+# See NOTICE.
 
 VERSION="v29.0.1.1"
 
@@ -56,7 +65,7 @@ function fetch-libs-repository {
       mkdir repo
       pushd repo
         git init .
-        git remote add origin https://github.com/oliverbestmann/webgpu
+        git remote add origin https://github.com/belluikit/webgpu
       popd
     fi
 
@@ -134,7 +143,7 @@ write-gitattributes
 push-libs-repository
 
 for SYSTEM in $SYSTEMS ; do
-  env GOPROXY=direct go get -u github.com/oliverbestmann/webgpu/libs-$SYSTEM@libs-$SYSTEM
+  env GOPROXY=direct go get -u github.com/belluikit/webgpu/libs-$SYSTEM@libs-$SYSTEM
 done
 
 # re-generate enums & bindings
