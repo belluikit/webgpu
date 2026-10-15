@@ -1,0 +1,38 @@
+belluikit/webgpu
+https://github.com/belluikit/webgpu
+
+This product is a modified version of oliverbestmann/webgpu
+(https://github.com/oliverbestmann/webgpu), which continues
+cogentcore/webgpu (https://github.com/cogentcore/webgpu), itself derived
+from rajveermalviya/go-webgpu (https://github.com/rajveermalviya/go-webgpu).
+It is distributed under the Apache License, Version 2.0 (see LICENSE).
+
+Modifications are Copyright 2026 TrendVidia and the bellui developers,
+licensed under the Apache License, Version 2.0.
+
+Changes relative to oliverbestmann/webgpu (fork base: commit b087960 on its
+main branch):
+
+- Module path renamed from github.com/oliverbestmann/webgpu to
+  github.com/belluikit/webgpu. Every import of the module's own packages was
+  updated (examples/, wgpu/, wgpuglfw/, cmd/enums/, the generated header of
+  wgpu/gen_enums.go).
+- go.mod requires the platform library modules
+  github.com/belluikit/webgpu/libs-{android,darwin,ios,linux,windows} from this
+  repository's libs-* branches instead of oliverbestmann's, and drops the
+  upstream retract directive.
+- libs-ios branch: adds an arm64 iOS Simulator slice
+  (libs-ios/arm64-simulator/libwgpu_native.a, from the same wgpu-native
+  release) selected by the `iossimulator` build tag.
+- libs-windows branch: replaces the arm64 MSVC library (wgpu_native.lib) with
+  a GNU-ABI (gnullvm) build, libs-windows/arm64/libwgpu_native.a, which the
+  llvm-mingw toolchain used by cgo on windows/arm64 can link. It is built by
+  the added workflow .github/workflows/build-wgpu-windows-arm64.yml.
+- libs-* branches: module paths renamed to belluikit, and each branch carries
+  wgpu-native's license notice (MIT OR Apache-2.0).
+- update-wgpu.sh targets this repository instead of oliverbestmann's.
+- README rewritten to describe this fork.
+
+The prebuilt static libraries on the libs-* branches are from wgpu-native
+(https://github.com/gfx-rs/wgpu-native), licensed MIT OR Apache-2.0. Apart
+from the two slices above they are upstream's release archives, unchanged.
