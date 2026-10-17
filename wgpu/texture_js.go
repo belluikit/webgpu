@@ -60,3 +60,14 @@ func (g *Texture) TryCreateView(descriptor *TextureViewDescriptor) (_ *TextureVi
 		jsValue: jsView,
 	}, nil
 }
+
+// Destroy as described:
+// https://gpuweb.github.io/gpuweb/#dom-gputexture-destroy
+//
+// In the browser, Release is a no-op: a texture's GPU memory is freed only by
+// Destroy or when the JavaScript garbage collector reclaims the wrapper, and the
+// collector does not respond to GPU memory pressure. Callers that create
+// textures often must Destroy them. The native version already has Destroy.
+func (g *Texture) Destroy() {
+	g.jsValue.Call("destroy")
+}
