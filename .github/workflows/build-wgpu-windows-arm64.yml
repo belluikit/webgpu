@@ -26,7 +26,7 @@ jobs:
     env:
       CARGO_BUILD_TARGET: aarch64-pc-windows-gnullvm
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -96,7 +96,7 @@ jobs:
             exit 1
           fi
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: wgpu-windows-arm64-gnullvm
           path: tmp/target/aarch64-pc-windows-gnullvm/release/libwgpu_native.a
