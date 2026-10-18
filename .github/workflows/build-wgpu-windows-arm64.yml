@@ -59,6 +59,12 @@ jobs:
           test -f "$SYSROOT/include/math.h" || { echo "unexpected llvm-mingw layout: no $SYSROOT/include/math.h" >&2; exit 1; }
           echo "BINDGEN_EXTRA_CLANG_ARGS_aarch64_pc_windows_gnullvm=--target=aarch64-w64-mingw32 --sysroot=$SYSROOT" >> $GITHUB_ENV
 
+          # rustc links aarch64-pc-windows-gnullvm with aarch64-w64-mingw32-clang,
+          # which llvm-mingw ships in <root>/bin; without it on PATH the build
+          # compiles and then dies on "linker `aarch64-w64-mingw32-clang` not found".
+          test -x "$SYSROOT/bin/aarch64-w64-mingw32-clang.exe" || { echo "no aarch64-w64-mingw32-clang in $SYSROOT/bin" >&2; exit 1; }
+          echo "$SYSROOT/bin" >> $GITHUB_PATH
+
       - name: Build
         shell: bash
         run: |
