@@ -928,7 +928,8 @@ func (g *Device) GetLimits() Limits {
 
 	nativeLimits := callocOne[C.WGPUNativeLimits]()
 	defer free(nativeLimits)
-	limits.nextInChain = (*C.WGPUChainedStruct)(unsafe.Pointer(&nativeLimits))
+	nativeLimits.chain.sType = C.WGPUSType_NativeLimits
+	limits.nextInChain = (*C.WGPUChainedStruct)(unsafe.Pointer(nativeLimits))
 
 	C.wgpuDeviceGetLimits(g.ref, &limits)
 
