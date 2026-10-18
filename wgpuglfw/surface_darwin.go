@@ -5,8 +5,8 @@ package wgpuglfw
 import (
 	"unsafe"
 
-	"github.com/go-gl/glfw/v3.4/glfw"
 	"github.com/belluikit/webgpu/wgpu"
+	"github.com/go-gl/glfw/v3.4/glfw"
 )
 
 /*

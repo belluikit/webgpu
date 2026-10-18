@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/go-gl/glfw/v3.4/glfw"
 	"github.com/belluikit/webgpu/wgpuglfw"
+	"github.com/go-gl/glfw/v3.4/glfw"
 )
 
 func main() {
