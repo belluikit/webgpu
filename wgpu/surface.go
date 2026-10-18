@@ -109,8 +109,10 @@ func (g *Surface) Configure(device *Device, config *SurfaceConfiguration) {
 	C.wgpuSurfaceConfigure(g.ref, cfg)
 }
 
-// NOTE: you should typically not call [Texture.Release] on the returned texture.
-// Instead, you should call [TextureView.Release] on any [TextureView] you create from it.
+// The caller owns the returned texture and must call [Texture.Release] on it
+// after [Surface.Present], or when abandoning the frame. It is not released by
+// the garbage collector: dropping it before Present would discard the frame.
+// Releasing it before Present discards the frame too.
 // You need to check the status of the returned texture, or use SurfaceTexture.Get.
 func (g *Surface) TryGetCurrentTexture() (SurfaceTexture, error) {
 	if g.device == nil {
