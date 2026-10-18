@@ -9,10 +9,10 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/go-gl/glfw/v3.4/glfw"
 	"github.com/belluikit/webgpu/examples/internal/glm"
 	"github.com/belluikit/webgpu/wgpu"
 	"github.com/belluikit/webgpu/wgpuglfw"
+	"github.com/go-gl/glfw/v3.4/glfw"
 
 	_ "embed"
 )

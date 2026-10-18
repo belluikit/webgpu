@@ -47,6 +47,17 @@ jobs:
         run: ${{ matrix.setup_env }}
         shell: bash
 
+      - name: Check formatting
+        if: runner.os == 'Linux'
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "gofmt needed on:" >&2
+            echo "$unformatted" >&2
+            exit 1
+          fi
+        shell: bash
+
       - name: Run tests
         run: |
           set -x
