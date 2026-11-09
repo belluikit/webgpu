@@ -110,6 +110,57 @@ function copy-to-target() {
   fi
 }
 
+# Rust target triples each libs-* branch's libraries are built for.
+function rust-targets() {
+  case "$1" in
+    android) echo aarch64-linux-android,x86_64-linux-android,armv7-linux-androideabi,i686-linux-android ;;
+    darwin)  echo aarch64-apple-darwin,x86_64-apple-darwin ;;
+    ios)     echo aarch64-apple-ios,x86_64-apple-ios,aarch64-apple-ios-sim ;;
+    linux)   echo aarch64-unknown-linux-gnu,x86_64-unknown-linux-gnu ;;
+    windows) echo x86_64-pc-windows-gnu,aarch64-pc-windows-gnullvm,i686-pc-windows-msvc ;;
+  esac
+}
+
+# write libs-*/THIRD_PARTY_NOTICES.txt on each branch (#17): the Rust
+# packages compiled into its libraries and the notices of the Rust
+# standard library of each rustc that built one. The rustc versions are
+# read from the libraries themselves, so the hand-built slices count too.
+function write-notices() {
+  local ROOT
+  ROOT=$(pwd)
+  git -C "$ZIPS/wgpu-native" fetch -q --tags
+  git -C "$ZIPS/wgpu-native" checkout -q "$VERSION"
+
+  for SYSTEM in $SYSTEMS ; do
+    git -C libs/repo switch "libs-$SYSTEM"
+    local DIR="libs/repo/libs-$SYSTEM"
+    local STDS=""
+    local V
+    for V in $(find "$DIR" \( -name '*.a' -o -name '*.lib' \) -exec strings {} \; \
+        | sed -nE 's/.*rustc version ([0-9]+\.[0-9]+\.[0-9]+) .*/\1/p' | sort -u) ; do
+      local HTML="$ROOT/$ZIPS/rustc-$V/COPYRIGHT-library.html"
+      if ! [[ -f "$HTML" ]] ; then
+        mkdir -p "$ZIPS/rustc-$V"
+        curl -sfL "https://static.rust-lang.org/dist/rustc-$V-x86_64-unknown-linux-gnu.tar.xz" \
+          | tar -xJf - -C "$ZIPS/rustc-$V" --strip-components 5 \
+              "rustc-$V-x86_64-unknown-linux-gnu/rustc/share/doc/rust/COPYRIGHT-library.html"
+      fi
+      STDS="${STDS:+$STDS,}$V=$HTML"
+    done
+    if [[ -z "$STDS" ]] ; then
+      echo "no rustc version found in $DIR's libraries" >&2
+      exit 1
+    fi
+
+    (cd cmd/notices && go run . -src "$ROOT/$ZIPS/wgpu-native" -targets "$(rust-targets "$SYSTEM")" \
+      -std "$STDS" -o "$ROOT/$DIR/THIRD_PARTY_NOTICES.txt")
+    git -C libs/repo add "libs-$SYSTEM/THIRD_PARTY_NOTICES.txt"
+    if [ -n "$(git -C libs/repo status --porcelain)" ] ; then
+      git -C libs/repo commit -m "third-party notices for $VERSION"
+    fi
+  done
+}
+
 function write-gitattributes() {
   cat > wgpu/lib/.gitattributes <<EOF
 # See
@@ -137,6 +188,8 @@ copy-to-target "android-aarch64"  "android"   "arm64"   libwgpu_native.a
 copy-to-target "android-x86_64"   "android"   "amd64"   libwgpu_native.a
 copy-to-target "android-armv7"    "android"   "arm"     libwgpu_native.a
 copy-to-target "android-i686"     "android"   "386"     libwgpu_native.a
+
+write-notices
 
 write-gitattributes
 
