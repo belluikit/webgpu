@@ -43,7 +43,6 @@ import (
 // Windows
 #cgo windows,amd64 CFLAGS: -I${SRCDIR}/lib/windows/amd64
 #cgo windows,arm64 CFLAGS: -I${SRCDIR}/lib/windows/arm64
-#cgo windows,386 CFLAGS: -I${SRCDIR}/lib/windows/386
 
 #include <stdio.h>
 #include <stdlib.h>

@@ -58,8 +58,9 @@ function download-and-extract {
           ARCH="${ZIP#wgpu-}"
           ARCH="${ARCH%-release.zip}"
           # MSVC builds cgo cannot link; windows/arm64 is built by the
-          # workflow instead (fetch-windows-arm64).
-          if [[ "$ARCH" = windows-x86_64-msvc || "$ARCH" = windows-aarch64-msvc ]] ; then
+          # workflow instead (fetch-windows-arm64), and windows/386 is not
+          # supported (#25).
+          if [[ "$ARCH" = windows-*-msvc ]] ; then
             continue
           fi
 
@@ -183,7 +184,7 @@ function rust-targets() {
     darwin)  echo aarch64-apple-darwin,x86_64-apple-darwin ;;
     ios)     echo aarch64-apple-ios,x86_64-apple-ios,aarch64-apple-ios-sim ;;
     linux)   echo aarch64-unknown-linux-gnu,x86_64-unknown-linux-gnu ;;
-    windows) echo x86_64-pc-windows-gnu,aarch64-pc-windows-gnullvm,i686-pc-windows-msvc ;;
+    windows) echo x86_64-pc-windows-gnu,aarch64-pc-windows-gnullvm ;;
   esac
 }
 
@@ -252,7 +253,6 @@ copy-to-target "ios-aarch64-simulator"   "ios"     "arm64-simulator" libwgpu_nat
 copy-to-target "ios-x86_64-simulator"    "ios"     "amd64"           libwgpu_native.a
 copy-to-target "windows-x86_64-gnu"      "windows" "amd64"           libwgpu_native.a
 copy-to-target "windows-aarch64-gnullvm" "windows" "arm64"           libwgpu_native.a no
-copy-to-target "windows-i686-msvc"       "windows" "386"             wgpu_native.lib
 copy-to-target "linux-aarch64"           "linux"   "arm64"           libwgpu_native.a
 copy-to-target "linux-x86_64"            "linux"   "amd64"           libwgpu_native.a
 copy-to-target "android-aarch64"         "android" "arm64"           libwgpu_native.a
