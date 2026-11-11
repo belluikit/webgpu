@@ -979,6 +979,12 @@ func (g *Device) HasFeature(feature FeatureName) bool {
 	return goBool(hasFeature)
 }
 
+// Destroy destroys the device, as wgpuDeviceDestroy does: it is lost, with
+// DeviceLostReasonDestroyed, and nothing more can be done with it.
+func (g *Device) Destroy() {
+	C.wgpuDeviceDestroy(g.ref)
+}
+
 func (g *Device) Poll(wait bool, submissionIndex *uint64) (queueEmpty bool) {
 	return goBool(C.wgpuDevicePoll(g.ref, cBool(wait), (*C.WGPUSubmissionIndex)(submissionIndex)))
 }

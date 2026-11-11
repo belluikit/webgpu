@@ -2,6 +2,19 @@
 
 package wgpu
 
+// Destroy destroys the device as described:
+// https://gpuweb.github.io/gpuweb/#dom-gpudevice-destroy
+func (g *Device) Destroy() {
+	g.jsValue.Call("destroy")
+}
+
+// Lost always reports false on js: the browser reports a loss through the
+// device's lost promise, which this binding does not read yet. Only the
+// native build can abort on a lost device, which is what Lost guards.
+func (g *Device) Lost() (reason DeviceLostReason, message string, lost bool) {
+	return 0, "", false
+}
+
 // GetQueue returns a Queue as described:
 // https://gpuweb.github.io/gpuweb/#dom-gpudevice-queue
 func (g *Device) GetQueue() *Queue {
