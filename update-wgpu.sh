@@ -134,6 +134,19 @@ function push-libs-repository {
   done
 }
 
+# copy a zip's headers to a directory under wgpu/lib, with LF line endings:
+# the windows zips ship them with CRLF, the others with LF.
+function copy-headers() {
+  local ZIP="$1"
+  local DIR="$2"
+  local H
+  mkdir -p "$DIR"
+  for H in $ZIPS/zips/"$ZIP"/include/webgpu/*.h ; do
+    sed 's/\r$//' "$H" > "$DIR/$(basename "$H")"
+  done
+  git add "$DIR"
+}
+
 # copy files into target directories. HEADERS=no skips the headers, for a
 # slice whose arch shares a header directory with another.
 function copy-to-target() {
@@ -145,9 +158,7 @@ function copy-to-target() {
 
   # copy headers
   if [[ "$HEADERS" = yes ]] ; then
-    mkdir -p wgpu/lib/"$TARGET"/"$ARCH"
-    cp $ZIPS/zips/"$ZIP"/include/webgpu/*.h wgpu/lib/"$TARGET"/"$ARCH"
-    git add "wgpu/lib/$TARGET/$ARCH"
+    copy-headers "$ZIP" "wgpu/lib/$TARGET/$ARCH"
   fi
 
   # switch to the correct library branch
@@ -251,9 +262,7 @@ copy-to-target "android-i686"            "android" "386"             libwgpu_nat
 
 # the workflow's artifact carries no headers; they are the same for every
 # slice of a release.
-mkdir -p wgpu/lib/windows/arm64
-cp $ZIPS/zips/windows-x86_64-gnu/include/webgpu/*.h wgpu/lib/windows/arm64
-git add wgpu/lib/windows/arm64
+copy-headers windows-x86_64-gnu wgpu/lib/windows/arm64
 
 write-notices
 
@@ -268,5 +277,5 @@ done
 # re-generate enums & bindings
 go generate ./wgpu
 
-git add go.mod go.sum wgpu/lib/
+git add go.mod go.sum wgpu/
 git commit -m "chore: update wgpu to $VERSION"
