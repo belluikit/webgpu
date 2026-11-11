@@ -26,9 +26,22 @@ jobs:
                 libasound2-dev libxcursor-dev libxi-dev libxinerama-dev libxrandr-dev libxxf86vm-dev \
                 libxkbcommon-dev libwayland-dev
 
+          - os: ubuntu-24.04-arm
+            name: Linux arm64
+            run_examples: true
+            setup_env: |
+              sudo apt-get update
+              sudo apt-get install -f -y libegl1-mesa-dev mesa-vulkan-drivers \
+                libasound2-dev libxcursor-dev libxi-dev libxinerama-dev libxrandr-dev libxxf86vm-dev \
+                libxkbcommon-dev libwayland-dev
+
           - os: macos-latest
             name: Darwin
             run_examples: false # macos vm doesn't have software metal api
+
+          - os: macos-15-intel
+            name: Darwin amd64
+            run_examples: false
 
           - os: windows-latest
             name: Windows

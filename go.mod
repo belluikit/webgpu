@@ -3,11 +3,11 @@ module github.com/belluikit/webgpu
 go 1.25
 
 require (
-	github.com/belluikit/webgpu/libs-android v0.0.0-20260731101013-82e3bdc8353b
-	github.com/belluikit/webgpu/libs-darwin v0.0.0-20260731101014-ce4f86d4438c
-	github.com/belluikit/webgpu/libs-ios v0.0.0-20260727093643-fcde44a448a6
-	github.com/belluikit/webgpu/libs-linux v0.0.0-20260731101015-884076933a5d
-	github.com/belluikit/webgpu/libs-windows v0.0.0-20260727093645-6b8e55d25f27
+	github.com/belluikit/webgpu/libs-android v0.0.0-20261111082704-bbaa548a1d45
+	github.com/belluikit/webgpu/libs-darwin v0.0.0-20261111082641-092cb90d718e
+	github.com/belluikit/webgpu/libs-ios v0.0.0-20261111082643-f4adf07a4281
+	github.com/belluikit/webgpu/libs-linux v0.0.0-20261111082701-57a52ab65675
+	github.com/belluikit/webgpu/libs-windows v0.0.0-20261111082658-5d4af63c673f
 	github.com/go-gl/glfw/v3.4/glfw v0.1.0-pre.1.0.20260628091122-0bd588dc30cf
 	github.com/stretchr/testify v1.11.1
 )

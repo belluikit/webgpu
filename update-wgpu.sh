@@ -6,14 +6,25 @@ set -ex -o pipefail
 # the header files to wgpu/lib.
 # the library files are pushed to branches according to the arch.
 #
-# belluikit fork: two slices on the libs-* branches are NOT produced by this
-# script and must be refreshed by hand on a version bump: the iOS arm64
-# Simulator slice (libs-ios/arm64-simulator, skipped below) and the GNU-ABI
-# windows/arm64 archive (libs-windows/arm64/libwgpu_native.a, built by
-# .github/workflows/build-wgpu-windows-arm64.yml). The windows-aarch64 line
-# below still copies upstream's MSVC wgpu_native.lib, which the script would
-# then push next to the GNU archive, so do not run it unmodified for a bump.
+# belluikit fork, on top of upstream's script:
+# - the iOS arm64 Simulator slice is vendored too (libs-ios/arm64-simulator);
+# - windows/arm64 is a GNU-ABI build of the same release, made by
+#   .github/workflows/build-wgpu-windows-arm64.yml, which this script
+#   dispatches (upstream's slice is MSVC, which cgo cannot link);
+# - every library goes through cmd/striplibs, which removes the sections
+#   Go 1.27.4's cgo check refuses (#24).
 # See NOTICE.
+#
+# Needs: gh (logged in), go, llvm-objcopy (LLVM_OBJCOPY overrides it).
+#
+# Environment:
+#   LIBS_BRANCH_PREFIX  push each libs-<os> branch as <prefix>libs-<os>, for
+#                       review, instead of updating libs-<os> itself; go.mod
+#                       is pinned to the pushed commits either way.
+#   WINDOWS_ARM64_RUN   use the artifact of this finished workflow run
+#                       instead of dispatching a new one.
+#   WORKFLOW_REF        branch to dispatch the workflow on (default: the
+#                       current branch, which must be pushed).
 
 VERSION="v29.0.1.1"
 
@@ -21,8 +32,13 @@ ZIPS="releases-$VERSION"
 
 SYSTEMS="android darwin ios linux windows"
 
+REPO="belluikit/webgpu"
+
+LLVM_OBJCOPY="${LLVM_OBJCOPY:-llvm-objcopy}"
+
 # download files and extract zip files.
-# the resulting files are in $ZIPS/*/
+# the resulting files are in $ZIPS/zips/<name>/, where <name> is the zip's
+# name without "wgpu-" and "-release.zip", e.g. ios-aarch64-simulator.
 function download-and-extract {
   if ! [[ -f $ZIPS/ok ]] ; then
     mkdir -p $ZIPS
@@ -39,11 +55,14 @@ function download-and-extract {
       pushd zips
 
         for ZIP in *.zip ; do
-          if [[ "$ZIP" = *-x86_64-msvc-* || "$ZIP" = *-aarch64-simulator-* ]] ; then
+          ARCH="${ZIP#wgpu-}"
+          ARCH="${ARCH%-release.zip}"
+          # MSVC builds cgo cannot link; windows/arm64 is built by the
+          # workflow instead (fetch-windows-arm64).
+          if [[ "$ARCH" = windows-x86_64-msvc || "$ARCH" = windows-aarch64-msvc ]] ; then
             continue
           fi
 
-          ARCH=$(cut -d- -f2-3 <<< "$ZIP")
           mkdir "$ARCH"
           pushd "$ARCH"
             unzip ../"$ZIP"
@@ -56,6 +75,38 @@ function download-and-extract {
   fi
 }
 
+# put the GNU-ABI windows/arm64 build of $VERSION in
+# $ZIPS/zips/windows-aarch64-gnullvm/lib, dispatching the workflow unless
+# WINDOWS_ARM64_RUN names a finished run.
+function fetch-windows-arm64 {
+  local DIR="$ZIPS/zips/windows-aarch64-gnullvm/lib"
+  if ! [[ -f "$DIR/libwgpu_native.a" ]] ; then
+    local RUN="${WINDOWS_ARM64_RUN:-}"
+    if [[ -z "$RUN" ]] ; then
+      local REF="${WORKFLOW_REF:-$(git branch --show-current)}"
+      local URL
+      URL=$(gh workflow run build-wgpu-windows-arm64.yml -R "$REPO" --ref "$REF" -f wgpu_native_ref="$VERSION" | tail -1)
+      RUN="${URL##*/}"
+      if ! [[ "$RUN" =~ ^[0-9]+$ ]] ; then
+        echo "could not read the dispatched run from: $URL" >&2
+        exit 1
+      fi
+      gh run watch "$RUN" -R "$REPO" --exit-status
+    fi
+
+    rm -rf "$DIR"
+    mkdir -p "$DIR"
+    gh run download "$RUN" -R "$REPO" -n wgpu-windows-arm64-gnullvm -D "$DIR"
+  fi
+
+  local BUILT
+  BUILT=$(cat "$DIR/WGPU_NATIVE_REF")
+  if [[ "$BUILT" != "$VERSION" ]] ; then
+    echo "windows/arm64 build is of $BUILT, not $VERSION" >&2
+    exit 1
+  fi
+}
+
 # create the libs repository and fetch latest branches
 function fetch-libs-repository {
   mkdir -p libs
@@ -65,13 +116,13 @@ function fetch-libs-repository {
       mkdir repo
       pushd repo
         git init .
-        git remote add origin https://github.com/belluikit/webgpu
+        git remote add origin https://github.com/$REPO
       popd
     fi
 
     for SYSTEM in $SYSTEMS ; do
       git -C repo fetch origin libs-"$SYSTEM"
-      git -C repo switch libs-"$SYSTEM"
+      git -C repo switch -C libs-"$SYSTEM" origin/libs-"$SYSTEM"
     done
   popd
 }
@@ -79,29 +130,44 @@ function fetch-libs-repository {
 # push all library branches to the git repository
 function push-libs-repository {
   for SYSTEM in $SYSTEMS ; do
-    git -C libs/repo push origin libs-"$SYSTEM"
+    git -C libs/repo push origin libs-"$SYSTEM":refs/heads/"${LIBS_BRANCH_PREFIX:-}"libs-"$SYSTEM"
   done
 }
 
-# copy files into target directories
+# copy a zip's headers to a directory under wgpu/lib, with LF line endings:
+# the windows zips ship them with CRLF, the others with LF.
+function copy-headers() {
+  local ZIP="$1"
+  local DIR="$2"
+  local H
+  mkdir -p "$DIR"
+  for H in $ZIPS/zips/"$ZIP"/include/webgpu/*.h ; do
+    sed 's/\r$//' "$H" > "$DIR/$(basename "$H")"
+  done
+  git add "$DIR"
+}
+
+# copy files into target directories. HEADERS=no skips the headers, for a
+# slice whose arch shares a header directory with another.
 function copy-to-target() {
   local ZIP="$1"
   local TARGET="$2"
   local ARCH="$3"
   local LIB="$4"
+  local HEADERS="${5:-yes}"
 
   # copy headers
-  mkdir -p wgpu/lib/"$TARGET"/"$ARCH"
-  cp $ZIPS/zips/"$ZIP"/include/webgpu/*.h wgpu/lib/"$TARGET"/"$ARCH"
-  git add "wgpu/lib/$TARGET/$ARCH"
-
+  if [[ "$HEADERS" = yes ]] ; then
+    copy-headers "$ZIP" "wgpu/lib/$TARGET/$ARCH"
+  fi
 
   # switch to the correct library branch
   git -C libs/repo switch "libs-$TARGET"
 
-  # copy lib to branch
+  # copy lib to branch, without the sections cgo refuses
   mkdir -p libs/repo/libs-"$TARGET"/"$ARCH"
   cp $ZIPS/zips/"$ZIP"/lib/"$LIB" libs/repo/libs-"$TARGET"/"$ARCH"
+  $ZIPS/striplibs -objcopy "$LLVM_OBJCOPY" libs/repo/libs-"$TARGET"/"$ARCH"/"$LIB"
   git -C libs/repo add libs-"$TARGET"/"$ARCH"
 
   # commit the file if something has changed
@@ -162,32 +228,41 @@ function write-notices() {
 }
 
 function write-gitattributes() {
-  cat > wgpu/lib/.gitattributes <<EOF
+  cat > wgpu/lib/.gitattributes <<EOF2
 # See
 # https://github.com/github/linguist/blob/249bbd1c2ffc631ca2ec628da26be5800eec3d48/docs/overrides.md#vendored-code
 
 webgpu.h linguist-vendored
 wgpu.h linguist-vendored
-EOF
+EOF2
 }
 
 download-and-extract
 
+fetch-windows-arm64
+
+go build -o $ZIPS/striplibs ./cmd/striplibs
+
 fetch-libs-repository
 
-copy-to-target "macos-aarch64"    "darwin"    "arm64"   libwgpu_native.a
-copy-to-target "macos-x86_64"     "darwin"    "amd64"   libwgpu_native.a
-copy-to-target "ios-aarch64"      "ios"       "arm64"   libwgpu_native.a
-copy-to-target "ios-x86_64"       "ios"       "amd64"   libwgpu_native.a
-copy-to-target "windows-aarch64"  "windows"   "arm64"   wgpu_native.lib
-copy-to-target "windows-x86_64"   "windows"   "amd64"   libwgpu_native.a
-copy-to-target "windows-i686"     "windows"   "386"     wgpu_native.lib
-copy-to-target "linux-aarch64"    "linux"     "arm64"   libwgpu_native.a
-copy-to-target "linux-x86_64"     "linux"     "amd64"   libwgpu_native.a
-copy-to-target "android-aarch64"  "android"   "arm64"   libwgpu_native.a
-copy-to-target "android-x86_64"   "android"   "amd64"   libwgpu_native.a
-copy-to-target "android-armv7"    "android"   "arm"     libwgpu_native.a
-copy-to-target "android-i686"     "android"   "386"     libwgpu_native.a
+copy-to-target "macos-aarch64"           "darwin"  "arm64"           libwgpu_native.a
+copy-to-target "macos-x86_64"            "darwin"  "amd64"           libwgpu_native.a
+copy-to-target "ios-aarch64"             "ios"     "arm64"           libwgpu_native.a
+copy-to-target "ios-aarch64-simulator"   "ios"     "arm64-simulator" libwgpu_native.a no
+copy-to-target "ios-x86_64-simulator"    "ios"     "amd64"           libwgpu_native.a
+copy-to-target "windows-x86_64-gnu"      "windows" "amd64"           libwgpu_native.a
+copy-to-target "windows-aarch64-gnullvm" "windows" "arm64"           libwgpu_native.a no
+copy-to-target "windows-i686-msvc"       "windows" "386"             wgpu_native.lib
+copy-to-target "linux-aarch64"           "linux"   "arm64"           libwgpu_native.a
+copy-to-target "linux-x86_64"            "linux"   "amd64"           libwgpu_native.a
+copy-to-target "android-aarch64"         "android" "arm64"           libwgpu_native.a
+copy-to-target "android-x86_64"          "android" "amd64"           libwgpu_native.a
+copy-to-target "android-armv7"           "android" "arm"             libwgpu_native.a
+copy-to-target "android-i686"            "android" "386"             libwgpu_native.a
+
+# the workflow's artifact carries no headers; they are the same for every
+# slice of a release.
+copy-headers windows-x86_64-gnu wgpu/lib/windows/arm64
 
 write-notices
 
@@ -196,11 +271,11 @@ write-gitattributes
 push-libs-repository
 
 for SYSTEM in $SYSTEMS ; do
-  env GOPROXY=direct go get -u github.com/belluikit/webgpu/libs-$SYSTEM@libs-$SYSTEM
+  env GOPROXY=direct go get github.com/belluikit/webgpu/libs-$SYSTEM@"$(git -C libs/repo rev-parse libs-"$SYSTEM")"
 done
 
 # re-generate enums & bindings
 go generate ./wgpu
 
-git add go.mod go.sum wgpu/lib/
+git add go.mod go.sum wgpu/
 git commit -m "chore: update wgpu to $VERSION"

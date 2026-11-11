@@ -8,16 +8,23 @@ name: Build wgpu-native (windows/arm64, GNU ABI)
 # Every other slice comes from the upstream release prebuilts (see the libs-*
 # branches); this is the only artifact we compile ourselves.
 #
-# Run it with workflow_dispatch, then commit the artifact to the libs-windows
-# branch as libs-windows/arm64/libwgpu_native.a (replacing the MSVC .lib).
+# update-wgpu.sh dispatches it with the release it is vendoring and copies the
+# artifact to libs-windows/arm64/libwgpu_native.a. The artifact records the
+# release it was built from in WGPU_NATIVE_REF, which the script checks.
 
 on:
   workflow_dispatch:
+    inputs:
+      wgpu_native_ref:
+        description: >-
+          wgpu-native release tag to build, e.g. v29.0.1.1. Must match the
+          release the libs-* branches and the headers under wgpu/lib/ are
+          vendored from: a mismatch is an ABI break.
+        required: true
+        type: string
 
 env:
-  # Must match the wgpu-native release the libs-* branches were vendored from,
-  # and the headers vendored under wgpu/lib/ — a mismatch is an ABI break.
-  WGPU_NATIVE_REF: "v29.0.1.1"
+  WGPU_NATIVE_REF: ${{ inputs.wgpu_native_ref }}
 
 jobs:
   build-wgpu:
@@ -102,7 +109,13 @@ jobs:
             exit 1
           fi
 
+      - name: Record the release
+        shell: bash
+        run: printf '%s\n' "$WGPU_NATIVE_REF" > tmp/target/aarch64-pc-windows-gnullvm/release/WGPU_NATIVE_REF
+
       - uses: actions/upload-artifact@v7
         with:
           name: wgpu-windows-arm64-gnullvm
-          path: tmp/target/aarch64-pc-windows-gnullvm/release/libwgpu_native.a
+          path: |
+            tmp/target/aarch64-pc-windows-gnullvm/release/libwgpu_native.a
+            tmp/target/aarch64-pc-windows-gnullvm/release/WGPU_NATIVE_REF
