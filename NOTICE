@@ -30,9 +30,16 @@ main branch):
   the added workflow .github/workflows/build-wgpu-windows-arm64.yml.
 - libs-* branches: module paths renamed to belluikit, and each branch carries
   wgpu-native's license notice (MIT OR Apache-2.0).
-- update-wgpu.sh targets this repository instead of oliverbestmann's.
+- libs-* branches: every static library has its LLVM bitcode sections
+  (.llvmbc and .llvmcmd; __LLVM,__bitcode and __LLVM,__cmdline in Mach-O)
+  removed, because Go 1.27.4's cgo refuses to link a library holding them.
+  On libs-windows the -exclude-symbols: linker directives Go refuses and the
+  empty objects are removed too. The added tool cmd/striplibs does this.
+- update-wgpu.sh targets this repository instead of oliverbestmann's,
+  vendors the two slices above, and runs cmd/striplibs on every library.
 - README rewritten to describe this fork.
 
 The prebuilt static libraries on the libs-* branches are from wgpu-native
 (https://github.com/gfx-rs/wgpu-native), licensed MIT OR Apache-2.0. Apart
-from the two slices above they are upstream's release archives, unchanged.
+from the two slices above they are upstream's release archives, with only
+what cmd/striplibs removes taken out.

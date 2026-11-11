@@ -14,19 +14,21 @@ go get github.com/belluikit/webgpu
 ## What this fork changes
 
 The fork exists to add two platform slices upstream does not ship, both of
-which Bellui targets:
+which Bellui targets, and to keep every library linkable by current Go:
 
 | Delta | Why |
 |---|---|
 | `libs-ios` branch: `arm64-simulator/`, behind the `iossimulator` build tag | Go builds device *and* Simulator as `GOOS=ios/GOARCH=arm64`, but their Mach-O platforms differ, so the device archive cannot link a Simulator binary. Upstream ships device arm64 + Intel-simulator amd64 only. The slice is the `ios-aarch64-simulator` build from the same wgpu-native release. |
 | `libs-windows` branch: `arm64/libwgpu_native.a` built for the GNU (gnullvm) ABI | Upstream ships an aarch64-pc-windows-**MSVC** lib whose SEH/vcruntime C++ EH cannot be linked by the llvm-mingw toolchain Go/cgo uses on windows/arm64. Rebuilt by `.github/workflows/build-wgpu-windows-arm64.yml`. |
+| Every library: LLVM bitcode sections removed, by `cmd/striplibs` | Go 1.27.4's cgo refuses a library holding LLVM bitcode, and every wgpu-native archive does: the Rust standard library ships precompiled with it. On `libs-windows` it also drops the `-exclude-symbols:` linker directives Go refuses (Rust symbol names contain `..`) and empty objects. |
 
 Because Go modules are fetched by module path, all five platform library modules
 are served from this repository: `go.mod` requires
 `github.com/belluikit/webgpu/libs-{android,darwin,ios,linux,windows}` from its
 `libs-*` branches. The android, darwin and linux branches hold upstream's
-wgpu-native archives unchanged; only their module paths and license notices
-differ. The Go bindings differ from upstream only in the module path.
+wgpu-native archives with only the sections above removed; their module paths
+and license notices differ too. The Go bindings differ from upstream only in
+the module path.
 
 The full list of changes, and the copyright on them, is in [NOTICE](NOTICE).
 This fork is licensed under the Apache License 2.0, like upstream ([LICENSE](LICENSE)).
@@ -85,7 +87,8 @@ To work around that, libraries for the different systems are split into branches
 https://github.com/belluikit/webgpu/tree/libs-linux/libs-linux
 
 The `update-wgpu.sh` script updates all those branches and updates the go.mod file to pull the prebuild libraries as
-dependencies in.
+dependencies in. It needs `gh`, and `llvm-objcopy` for `cmd/striplibs`; its header lists the options, such as
+pushing the branches for review instead of updating them.
 
 ## Examples
 
