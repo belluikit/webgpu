@@ -37,7 +37,8 @@ import (
 // Darwin
 #cgo darwin,!ios,amd64 CFLAGS: -I${SRCDIR}/lib/darwin/amd64
 #cgo darwin,!ios,arm64 CFLAGS: -I${SRCDIR}/lib/darwin/arm64
-#cgo darwin,!ios       LDFLAGS: -framework Foundation
+// wgpu-native needs Foundation on iOS too, and the darwin tag matches ios (#26).
+#cgo darwin            LDFLAGS: -framework Foundation
 
 // Windows
 #cgo windows,amd64 CFLAGS: -I${SRCDIR}/lib/windows/amd64
