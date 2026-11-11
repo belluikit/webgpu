@@ -147,6 +147,9 @@ type DeviceDescriptor struct {
 	TracePath          string
 }
 
+// DeviceLostCallback is told of a device's loss, once, by the first
+// Device.Lost that sees it: wgpu reports the loss from inside other calls,
+// which cannot call back into Go.
 type DeviceLostCallback func(reason DeviceLostReason, message string)
 
 // TextureDescriptor as described:

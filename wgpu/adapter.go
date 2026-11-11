@@ -7,13 +7,15 @@ package wgpu
 #include <stdlib.h>
 #include <wgpu.h>
 
+#include "device_lost.h"
+
 extern void gowebgpu_request_device_callback_c(WGPURequestDeviceStatus status, WGPUDevice device, char const *message, void *userdata);
-extern void gowebgpu_device_lost_callback_c(WGPUDeviceLostReason reason, char const * message, void * userdata);
 
 */
 import "C"
 import (
 	"errors"
+	"sync"
 	"unsafe"
 )
 
@@ -115,22 +117,14 @@ func gowebgpu_request_device_callback_go(status C.WGPURequestDeviceStatus, devic
 	}
 }
 
-//export gowebgpu_device_lost_callback_go
-func gowebgpu_device_lost_callback_go(reason C.WGPUDeviceLostReason, message *C.char, userdata unsafe.Pointer) {
-	handle := lookupHandle(userdata)
-	defer handle.Delete()
-
-	cb, ok := handle.Value().(DeviceLostCallback)
-	if ok {
-		cb(DeviceLostReason(reason), C.GoString(message))
-	}
-}
-
 func (g *Adapter) RequestDevice(descriptor *DeviceDescriptor) (*Device, error) {
 	var desc *C.WGPUDeviceDescriptor = nil
 
 	if descriptor != nil {
-		desc = &C.WGPUDeviceDescriptor{}
+		// In C memory: it carries the lost callback's handle, a pointer into Go
+		// memory, which cgo refuses inside a Go-allocated argument.
+		desc = callocOne[C.WGPUDeviceDescriptor]()
+		defer free(desc)
 
 		if descriptor.Label != "" {
 			label := C.CString(descriptor.Label)
@@ -203,15 +197,6 @@ func (g *Adapter) RequestDevice(descriptor *DeviceDescriptor) (*Device, error) {
 			desc.requiredLimits.nextInChain = (*C.WGPUChainedStruct)(unsafe.Pointer(nativeLimits))
 		}
 
-		if descriptor.DeviceLostCallback != nil {
-			handle := newHandle(descriptor.DeviceLostCallback)
-
-			desc.deviceLostCallbackInfo = C.WGPUDeviceLostCallbackInfo{
-				callback:  C.WGPUDeviceLostCallback(C.gowebgpu_device_lost_callback_c),
-				userdata1: handle.ToPointer(),
-			}
-		}
-
 		if descriptor.TracePath != "" {
 			deviceExtras := callocOne[C.WGPUDeviceExtras]()
 			defer free(deviceExtras)
@@ -227,6 +212,19 @@ func (g *Adapter) RequestDevice(descriptor *DeviceDescriptor) (*Device, error) {
 
 			desc.nextInChain = (*C.WGPUChainedStruct)(unsafe.Pointer(deviceExtras))
 		}
+	}
+
+	// Every device records its loss, for Device.Lost (see
+	// gowebgpu_device_lost). Allocated in C, and never freed: the record must
+	// outlive any report wgpu makes, and a device is rarely made.
+	lost := callocOne[C.gowebgpu_device_lost]()
+	if desc == nil {
+		desc = callocOne[C.WGPUDeviceDescriptor]()
+		defer free(desc)
+	}
+	desc.deviceLostCallbackInfo = C.WGPUDeviceLostCallbackInfo{
+		callback:  C.WGPUDeviceLostCallback(C.gowebgpu_device_lost_record_c),
+		userdata1: unsafe.Pointer(lost),
 	}
 
 	var status RequestDeviceStatus
@@ -246,5 +244,49 @@ func (g *Adapter) RequestDevice(descriptor *DeviceDescriptor) (*Device, error) {
 		return nil, errors.New("failed to request device")
 	}
 
+	var onLost DeviceLostCallback
+	if descriptor != nil {
+		onLost = descriptor.DeviceLostCallback
+	}
+	deviceLosses.Store(device.ref, &deviceLoss{record: lost, onLost: onLost})
 	return device, nil
+}
+
+// deviceLoss is a device's loss record and the callback to tell of it.
+type deviceLoss struct {
+	record *C.gowebgpu_device_lost
+	onLost DeviceLostCallback
+	told   sync.Once
+}
+
+// deviceLosses maps each device RequestDevice made to its deviceLoss.
+var deviceLosses sync.Map // C.WGPUDevice → *deviceLoss
+
+// Lost reports whether the device has been lost, why, and wgpu's message. A
+// lost device must not be used: on a lost device wgpu-native aborts the
+// process in some calls instead of returning an error, such as
+// wgpuSurfaceGetCurrentTexture ("Parent device is lost"). Check Lost before
+// such a call.
+//
+// wgpu reports a loss from inside a later call on the device, so Lost is
+// true only after that call. The descriptor's DeviceLostCallback, if any, is
+// called once, by the first Lost that sees the loss, on its goroutine.
+func (g *Device) Lost() (reason DeviceLostReason, message string, lost bool) {
+	if g == nil || g.ref == nil {
+		return 0, "", false
+	}
+	v, ok := deviceLosses.Load(g.ref)
+	if !ok {
+		return 0, "", false
+	}
+	l := v.(*deviceLoss)
+	if C.gowebgpu_device_lost_get(l.record) == 0 {
+		return 0, "", false
+	}
+	reason = DeviceLostReason(l.record.reason)
+	message = C.GoString(&l.record.message[0])
+	if l.onLost != nil {
+		l.told.Do(func() { l.onLost(reason, message) })
+	}
+	return reason, message, true
 }
