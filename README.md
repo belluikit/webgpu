@@ -13,3 +13,9 @@ same reason amd64 uses the `-gnu` target rather than the MSVC one.
 `aarch64-pc-windows-gnullvm` by the `build-wgpu-windows-arm64.yml` workflow in the
 main branch of this repo, which also asserts the archive carries no MSVC C++ ABI
 symbols. Regenerate it whenever the pinned wgpu-native release moves.
+
+## No 32-bit (386) slice
+
+windows/386 is not supported (belluikit/webgpu#25). Upstream ships it only as an
+`i686-pc-windows-msvc` lib, which cgo's mingw toolchain cannot link, for the same
+reason as arm64 above, and nobody targets 32-bit Windows.
