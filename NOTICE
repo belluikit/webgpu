@@ -28,6 +28,9 @@ main branch):
   a GNU-ABI (gnullvm) build, libs-windows/arm64/libwgpu_native.a, which the
   llvm-mingw toolchain used by cgo on windows/arm64 can link. It is built by
   the added workflow .github/workflows/build-wgpu-windows-arm64.yml.
+- libs-windows branch: drops the 386 library (wgpu_native.lib, upstream's
+  i686-pc-windows-msvc build), which cgo cannot link; windows/386 is not
+  supported, and its headers under wgpu/lib/windows/386 are gone too.
 - libs-* branches: module paths renamed to belluikit, and each branch carries
   wgpu-native's license notice (MIT OR Apache-2.0).
 - libs-* branches: every static library has its LLVM bitcode sections

@@ -20,6 +20,7 @@ which Bellui targets, and to keep every library linkable by current Go:
 |---|---|
 | `libs-ios` branch: `arm64-simulator/`, behind the `iossimulator` build tag | Go builds device *and* Simulator as `GOOS=ios/GOARCH=arm64`, but their Mach-O platforms differ, so the device archive cannot link a Simulator binary. Upstream ships device arm64 + Intel-simulator amd64 only. The slice is the `ios-aarch64-simulator` build from the same wgpu-native release. |
 | `libs-windows` branch: `arm64/libwgpu_native.a` built for the GNU (gnullvm) ABI | Upstream ships an aarch64-pc-windows-**MSVC** lib whose SEH/vcruntime C++ EH cannot be linked by the llvm-mingw toolchain Go/cgo uses on windows/arm64. Rebuilt by `.github/workflows/build-wgpu-windows-arm64.yml`. |
+| No windows/386 | Upstream ships it only as an MSVC lib, which cgo's mingw toolchain cannot link, and nothing here targets 32-bit Windows (#25). A windows/386 build fails with `'wgpu.h' file not found`. |
 | Every library: LLVM bitcode sections removed, by `cmd/striplibs` | Go 1.27.4's cgo refuses a library holding LLVM bitcode, and every wgpu-native archive does: the Rust standard library ships precompiled with it. On `libs-windows` it also drops the `-exclude-symbols:` linker directives Go refuses (Rust symbol names contain `..`) and empty objects. |
 
 Because Go modules are fetched by module path, all five platform library modules

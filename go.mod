@@ -7,7 +7,7 @@ require (
 	github.com/belluikit/webgpu/libs-darwin v0.0.0-20261111082641-092cb90d718e
 	github.com/belluikit/webgpu/libs-ios v0.0.0-20261111082643-f4adf07a4281
 	github.com/belluikit/webgpu/libs-linux v0.0.0-20261111082701-57a52ab65675
-	github.com/belluikit/webgpu/libs-windows v0.0.0-20261111082658-5d4af63c673f
+	github.com/belluikit/webgpu/libs-windows v0.0.0-20261111091809-343dda80becd
 	github.com/go-gl/glfw/v3.4/glfw v0.1.0-pre.1.0.20260628091122-0bd588dc30cf
 	github.com/stretchr/testify v1.11.1
 )
